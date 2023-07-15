@@ -214,6 +214,10 @@ pub fn spawn_battle_mode_players(
         (map_size.rows - 2, map_size.columns - 2),
         (1, map_size.columns - 2),
         (map_size.rows - 2, 1),
+        (3, 5),
+        (map_size.rows - 4, map_size.columns - 6),
+        (3, map_size.columns - 6),
+        (map_size.rows - 4, 5),
     ];
     let mut possible_player_spawn_positions =
         possible_player_spawn_positions
@@ -269,11 +273,13 @@ pub fn setup_battle_mode(
     fonts: Res<Fonts>,
     hud_colors: Res<HUDColors>,
     mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
+    args: Res<Args>,
 ) {
     let world_id = WorldID(1);
     game_textures.set_map_textures(world_id);
 
-    let (map_size, percent_of_passable_positions_to_fill) = get_battle_mode_map_size_fill(2);
+    let (map_size, percent_of_passable_positions_to_fill) =
+        get_battle_mode_map_size_fill(args.players);
 
     // spawn HUD
     commands
@@ -303,7 +309,7 @@ pub fn setup_battle_mode(
             );
         });
 
-    let players: Vec<Penguin> = (0..2).map(Penguin).collect();
+    let players: Vec<Penguin> = (0..args.players).map(Penguin).collect();
 
     // map generation //
     let player_spawn_positions =
