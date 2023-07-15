@@ -15,20 +15,19 @@ impl From<RGBColor> for BackgroundColor {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub enum InputAction {
-    Up,
-    Down,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Direction {
     Left,
     Right,
-    Space,
-    W,
-    S,
-    A,
-    D,
-    G,
-    Return,
-    Escape,
-    Back,
-    F,
+    Up,
+    Down,
+}
+
+impl Direction {
+    pub const LIST: [Direction; 4] = [
+        Direction::Right,
+        Direction::Left,
+        Direction::Up,
+        Direction::Down,
+    ];
 }

@@ -1,275 +1,17 @@
-mod audio;
-mod battle_mode;
-mod common;
-mod game;
-mod loading;
-mod main_menu;
-mod map_transition;
-mod secret_mode;
-mod splash_screen;
-mod story_mode;
-#[cfg(target_arch = "wasm32")]
-mod web;
-
-use std::net::SocketAddr;
-
-use battle_mode::BattleModeConfiguration;
-use bevy::{
-    core::{Pod, Zeroable},
-    ecs as bevy_ecs,
-    prelude::*,
-    reflect as bevy_reflect,
-    utils::HashSet,
-    window::PrimaryWindow,
-};
-use bevy_ggrs::{
-    ggrs::{Config, PlayerHandle, PlayerType, SessionBuilder, UdpNonBlockingSocket},
-    AddRollbackCommandExtension, GgrsAppExtension, GgrsPlugin, GgrsSchedule, PlayerInputs,
-    Rollback, Session,
-};
-use common::resources::Fonts;
-use game::{
-    components::{
-        BaseTexture, BombSatchel, BurningItem, Destructible, Fuse, Health, HumanControlled,
-        ImmortalTexture, Penguin, Player, Position, Solid, SpawnPosition, TeamID, UIComponent,
-        UIRoot, Wall,
-    },
-    constants::{HUD_HEIGHT, TILE_HEIGHT, TILE_WIDTH},
-    resources::{GameTextures, HUDColors, MapSize, WorldID},
-    types::BotDifficulty,
-    utils::{get_x, get_y, init_hud, spawn_map},
-};
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
-use structopt::StructOpt;
+use bevy::{prelude::*, utils::HashSet, window::PrimaryWindow};
+use bevy_ggrs::{ggrs::PlayerHandle, AddRollbackCommandExtension, PlayerInputs};
 
 use crate::{
-    audio::AudioPlugin,
-    common::constants::{COLORS, PIXEL_SCALE},
+    components::*,
+    constants::{
+        COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP,
+        PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
+    },
+    resources::*,
+    types::Direction,
+    utils::{get_x, get_y, init_hud, spawn_map},
+    GgrsConfig, PlayerInput,
 };
-#[cfg(target_arch = "wasm32")]
-use crate::{loading::LoadingPlugin, web::*};
-
-const FPS: usize = 60;
-
-const INPUT_UP: u8 = 1 << 0;
-const INPUT_DOWN: u8 = 1 << 1;
-const INPUT_LEFT: u8 = 1 << 2;
-const INPUT_RIGHT: u8 = 1 << 3;
-const INPUT_ACTION: u8 = 1 << 4;
-
-// structopt will read command line parameters for u
-#[derive(StructOpt, Resource)]
-struct Opt {
-    #[structopt(short, long)]
-    local_port: u16,
-    #[structopt(short, long)]
-    players: Vec<String>,
-    #[structopt(short, long)]
-    spectators: Vec<SocketAddr>,
-}
-
-#[derive(Debug)]
-pub struct GgrsConfig;
-impl Config for GgrsConfig {
-    type Input = PlayerInput;
-    type State = u8;
-    type Address = SocketAddr;
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, PartialEq, Eq, Pod, Zeroable)]
-pub struct PlayerInput {
-    pub inp: u8,
-}
-
-#[derive(Default, Clone, Reflect, Component)]
-pub struct Bomb {
-    pub owner: Option<Entity>,
-    pub range: usize,
-    pub expiration_frame: usize,
-}
-
-#[derive(Default, Reflect, Component)]
-pub struct Fire {
-    pub expiration_frame: usize,
-}
-
-#[derive(Default, Reflect, Component)]
-pub struct Crumbling {
-    pub expiration_frame: usize,
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, States)]
-pub enum AppState {
-    #[cfg(target_arch = "wasm32")]
-    Loading,
-    #[cfg(target_arch = "wasm32")]
-    WebReadyToStart,
-    SplashScreen,
-    MainMenu,
-    MapTransition,
-    StoryModeSetup,
-    StoryModeManager,
-    BossSpeech,
-    StoryModeInGame,
-    HighScoreNameInput,
-    StoryModeTeardown,
-    BattleModeSetup,
-    BattleModeManager,
-    RoundStartFreeze,
-    BattleModeInGame,
-    LeaderboardDisplay,
-    BattleModeTeardown,
-    Paused,
-    SecretModeSetup,
-    SecretModeManager,
-    SecretModeInGame,
-    SecretModeTeardown,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "wasm32")] {
-                Self::Loading
-            } else {
-                // The loading state is not used in the native build in order to mimic
-                // the original game's behavior (non-blocking splash screen)
-                Self::BattleModeSetup
-            }
-        }
-    }
-}
-
-#[derive(Resource, Default, Reflect, Hash)]
-#[reflect(Hash)]
-pub struct FrameCount {
-    pub frame: usize,
-}
-
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn run() {
-    let mut app = App::new();
-
-    app.add_plugins(
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "ascii-bomb-ecs".to_string(),
-                    resizable: false,
-                    #[cfg(target_arch = "wasm32")]
-                    canvas: Some("#bevy-canvas".to_string()),
-                    ..Default::default()
-                }),
-                ..default()
-            })
-            // fixes blurry textures
-            .set(ImagePlugin::default_nearest()),
-    )
-    // .add_state::<AppState>()
-    .add_plugins(AudioPlugin);
-
-    #[cfg(target_arch = "wasm32")]
-    app.add_plugins(LoadingPlugin {
-        loading_state: AppState::Loading,
-        next_state: AppState::WebReadyToStart,
-    })
-    .add_systems(
-        Update,
-        handle_web_input.in_set(crate::common::Label::InputMapping),
-    )
-    .add_systems(OnEnter(AppState::WebReadyToStart), web_ready_to_start_enter)
-    .add_systems(
-        Update,
-        web_ready_to_start_update.run_if(in_state(AppState::WebReadyToStart)),
-    );
-
-    app.init_resource::<Fonts>()
-        .init_resource::<HUDColors>()
-        .init_resource::<GameTextures>();
-
-    app.insert_resource(BattleModeConfiguration {
-        amount_of_players: 4,
-        amount_of_bots: 0,
-        winning_score: 1,
-        bot_difficulty: BotDifficulty::Medium,
-    });
-
-    // read cmd line arguments
-    let opt = Opt::from_args();
-    let num_players = opt.players.len();
-    assert!(num_players > 0);
-
-    let mut sess_build = SessionBuilder::<GgrsConfig>::new()
-        .with_num_players(4)
-        .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 10 }) // (optional) set how often to exchange state checksums
-        .with_max_prediction_window(12) // (optional) set max prediction window
-        .with_input_delay(2); // (optional) set input delay for the local player
-
-    for (i, player_addr) in opt.players.iter().enumerate() {
-        // local player
-        if player_addr == "localhost" {
-            sess_build = sess_build.add_player(PlayerType::Local, i).unwrap();
-        } else {
-            // remote players
-            let remote_addr: SocketAddr = player_addr.parse().unwrap();
-            sess_build = sess_build
-                .add_player(PlayerType::Remote(remote_addr), i)
-                .unwrap();
-        }
-    }
-
-    // optionally, add spectators
-    for (i, spec_addr) in opt.spectators.iter().enumerate() {
-        sess_build = sess_build
-            .add_player(PlayerType::Spectator(*spec_addr), num_players + i)
-            .unwrap();
-    }
-
-    // start the GGRS session
-    let socket = UdpNonBlockingSocket::bind_to_port(opt.local_port).unwrap();
-    let sess = sess_build.start_p2p_session(socket).unwrap();
-
-    app.add_ggrs_plugin(
-        GgrsPlugin::<GgrsConfig>::new()
-            // define frequency of rollback game logic update
-            .with_update_frequency(FPS)
-            // define system that returns inputs given a player handle, so GGRS can send the inputs around
-            .with_input_system(input)
-            // register types of components AND resources you want to be rolled back
-            .register_rollback_component::<Transform>()
-            .register_rollback_component::<Position>()
-            .register_rollback_component::<Bomb>()
-            .register_rollback_component::<BombSatchel>()
-            .register_rollback_component::<Fire>()
-            .register_rollback_component::<Crumbling>()
-            .register_rollback_resource::<FrameCount>(),
-    )
-    .insert_resource(opt)
-    .add_systems(Startup, setup_battle_mode)
-    // these systems will be executed as part of the advance frame update
-    .add_systems(
-        GgrsSchedule,
-        (
-            increase_frame_system,
-            player_move,
-            bomb_drop,
-            fire_tick,
-            crumbling_tick,
-            explode_bombs,
-        )
-            .chain(),
-    )
-    // add your GGRS session
-    .insert_resource(Session::P2P(sess))
-    .insert_resource(FrameCount { frame: 0 })
-    // .add_systems(Update, animate_fuse)
-    .run();
-
-    app.run();
-}
 
 pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
     frame_count.frame += 1;
@@ -324,12 +66,6 @@ pub fn get_battle_mode_map_size_fill(player_count: usize) -> (MapSize, f32) {
     }
 }
 
-#[derive(Clone, Copy)]
-pub enum PenguinControlType {
-    Human(usize),
-    Bot,
-}
-
 pub fn spawn_battle_mode_players(
     commands: &mut Commands,
     game_textures: &GameTextures,
@@ -355,7 +91,6 @@ pub fn spawn_battle_mode_players(
     let mut spawn_player = |penguin_tag: Penguin| {
         let player_spawn_position = possible_player_spawn_positions.next().unwrap();
         let base_texture = game_textures.get_penguin_texture(penguin_tag).clone();
-        let immortal_texture = game_textures.immortal_penguin.clone();
         commands
             .spawn((
                 SpriteBundle {
@@ -371,23 +106,13 @@ pub fn spawn_battle_mode_players(
                     },
                     ..Default::default()
                 },
-                BaseTexture(base_texture),
-                ImmortalTexture(immortal_texture),
                 Player,
                 penguin_tag,
-                Health {
-                    lives: 1,
-                    max_health: 1,
-                    health: 1,
-                },
                 player_spawn_position,
-                SpawnPosition(player_spawn_position),
                 BombSatchel {
                     bombs_available: 1,
                     bomb_range: 2,
                 },
-                TeamID(penguin_tag.0),
-                HumanControlled(penguin_tag.0),
             ))
             .add_rollback();
 
@@ -441,7 +166,7 @@ pub fn setup_battle_mode(
             );
         });
 
-    let players: Vec<Penguin> = (0..4).map(Penguin).collect();
+    let players: Vec<Penguin> = (0..2).map(Penguin).collect();
 
     // map generation //
     let player_spawn_positions =
@@ -454,8 +179,6 @@ pub fn setup_battle_mode(
         percent_of_passable_positions_to_fill,
         true,
         &player_spawn_positions,
-        &[],
-        false,
     );
 
     primary_query.get_single_mut().unwrap().resolution.set(
@@ -478,15 +201,13 @@ pub fn setup_battle_mode(
 pub fn player_move(
     inputs: Res<PlayerInputs<GgrsConfig>>,
     mut p: ParamSet<(
-        Query<(&mut Transform, &Penguin, &mut Position, &mut Sprite), With<Rollback>>,
+        Query<(&mut Transform, &Penguin, &mut Position, &mut Sprite)>,
         Query<&Position, With<Solid>>,
     )>,
 ) {
     let solids: HashSet<Position> = p.p1().iter().copied().collect();
 
     for (mut transform, penguin, mut position, mut sprite) in p.p0().iter_mut() {
-        use crate::game::types::Direction;
-
         let input = inputs[penguin.0].0.inp;
         for (input_mask, direction) in [
             (INPUT_UP, Direction::Up),
@@ -528,7 +249,7 @@ pub fn bomb_drop(
     fonts: Res<Fonts>,
     world_id: Res<WorldID>,
     mut query: Query<(Entity, &Penguin, &Position, &mut BombSatchel)>,
-    query2: Query<&Position, Or<(With<Solid>, With<BurningItem>)>>,
+    query2: Query<&Position, With<Solid>>,
     frame_count: Res<FrameCount>,
 ) {
     for (entity, penguin, position, mut bomb_satchel) in query.iter_mut() {
@@ -580,109 +301,15 @@ pub fn bomb_drop(
                         },
                     });
 
-                    parent.spawn((
-                        Text2dBundle {
-                            text,
-                            transform: Transform::from_xyz(
-                                0.0,
-                                TILE_HEIGHT as f32 / 8.0 * 2.0,
-                                0.0,
-                            ),
-                            ..Default::default()
-                        },
-                        Fuse {
-                            color: fuse_color,
-                            animation_timer: Timer::from_seconds(0.1, TimerMode::Repeating),
-                        },
-                    ));
+                    parent.spawn((Text2dBundle {
+                        text,
+                        transform: Transform::from_xyz(0.0, TILE_HEIGHT as f32 / 8.0 * 2.0, 0.0),
+                        ..Default::default()
+                    },));
                 });
         }
     }
 }
-
-// pub fn animate_fuse(
-//     time: Res<Time>,
-//     fonts: Res<Fonts>,
-//     query: Query<&Bomb>,
-//     mut query2: Query<(&Parent, &mut Text, &mut Fuse, &mut Transform)>,
-// ) {
-//     // for (parent, mut text, mut fuse, mut transform) in query2.iter_mut() {
-//     //     fuse.animation_timer.tick(time.delta());
-//     //     let percent_left = fuse.animation_timer.percent_left();
-//     //     let fuse_char = match percent_left {
-//     //         _ if (0.0..0.33).contains(&percent_left) => 'x',
-//     //         _ if (0.33..0.66).contains(&percent_left) => '+',
-//     //         _ if (0.66..=1.0).contains(&percent_left) => '*',
-//     //         _ => unreachable!(),
-//     //     };
-
-//     //     let bomb = query.get(parent.get()).unwrap();
-//     //     let percent_left = bomb.timer.percent_left();
-
-//     //     match percent_left {
-//     //         _ if (0.66..1.0).contains(&percent_left) => {
-//     //             text.sections = vec![
-//     //                 TextSection {
-//     //                     value: fuse_char.into(),
-//     //                     style: TextStyle {
-//     //                         font: fonts.mono.clone(),
-//     //                         font_size: 2.0 * PIXEL_SCALE as f32,
-//     //                         color: fuse.color,
-//     //                     },
-//     //                 },
-//     //                 TextSection {
-//     //                     value: "┐\n │".into(),
-//     //                     style: TextStyle {
-//     //                         font: fonts.mono.clone(),
-//     //                         font_size: 2.0 * PIXEL_SCALE as f32,
-//     //                         color: COLORS[0].into(),
-//     //                     },
-//     //                 },
-//     //             ];
-//     //             let translation = &mut transform.translation;
-//     //             translation.x = 0.0;
-//     //             translation.y = TILE_HEIGHT as f32 / 8.0 * 2.0;
-//     //         }
-//     //         _ if (0.33..0.66).contains(&percent_left) => {
-//     //             text.sections = vec![
-//     //                 TextSection {
-//     //                     value: fuse_char.into(),
-//     //                     style: TextStyle {
-//     //                         font: fonts.mono.clone(),
-//     //                         font_size: 2.0 * PIXEL_SCALE as f32,
-//     //                         color: fuse.color,
-//     //                     },
-//     //                 },
-//     //                 TextSection {
-//     //                     value: "\n│".into(),
-//     //                     style: TextStyle {
-//     //                         font: fonts.mono.clone(),
-//     //                         font_size: 2.0 * PIXEL_SCALE as f32,
-//     //                         color: COLORS[0].into(),
-//     //                     },
-//     //                 },
-//     //             ];
-//     //             let translation = &mut transform.translation;
-//     //             translation.x = TILE_WIDTH as f32 / 12.0;
-//     //             translation.y = TILE_HEIGHT as f32 / 8.0 * 2.0;
-//     //         }
-//     //         _ if (0.0..0.33).contains(&percent_left) => {
-//     //             text.sections = vec![TextSection {
-//     //                 value: fuse_char.into(),
-//     //                 style: TextStyle {
-//     //                     font: fonts.mono.clone(),
-//     //                     font_size: 2.0 * PIXEL_SCALE as f32,
-//     //                     color: fuse.color,
-//     //                 },
-//     //             }];
-//     //             let translation = &mut transform.translation;
-//     //             translation.x = TILE_WIDTH as f32 / 12.0;
-//     //             translation.y = TILE_HEIGHT as f32 / 8.0 * 1.0;
-//     //         }
-//     //         _ => (),
-//     //     }
-//     // }
-// }
 
 pub fn fire_tick(
     mut commands: Commands,
@@ -782,7 +409,7 @@ pub fn explode_bombs(
         };
 
         spawn_fire(&mut commands, position);
-        for direction in crate::game::types::Direction::LIST {
+        for direction in Direction::LIST {
             for i in 1..=bomb.range {
                 let position = position.offset(direction, i);
 

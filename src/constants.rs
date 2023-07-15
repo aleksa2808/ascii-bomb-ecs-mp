@@ -1,6 +1,4 @@
-use super::types::RGBColor;
-
-pub const PIXEL_SCALE: usize = 8;
+use crate::types::RGBColor;
 
 pub const COLORS: [RGBColor; 16] = [
     RGBColor(12, 12, 12),
@@ -20,3 +18,18 @@ pub const COLORS: [RGBColor; 16] = [
     RGBColor(249, 241, 165),
     RGBColor(242, 242, 242),
 ];
+
+pub const PIXEL_SCALE: usize = 8;
+
+pub const HUD_HEIGHT: usize = 14 * PIXEL_SCALE;
+
+pub const TILE_HEIGHT: usize = 8 * PIXEL_SCALE;
+pub const TILE_WIDTH: usize = 6 * PIXEL_SCALE;
+
+pub const FPS: usize = 60;
+
+pub const INPUT_UP: u8 = 1 << 0;
+pub const INPUT_DOWN: u8 = 1 << 1;
+pub const INPUT_LEFT: u8 = 1 << 2;
+pub const INPUT_RIGHT: u8 = 1 << 3;
+pub const INPUT_ACTION: u8 = 1 << 4;

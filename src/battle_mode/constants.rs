@@ -1,2 +1,0 @@
-pub const ROUND_START_FREEZE_SECS: f32 = 0.5;
-pub const BATTLE_MODE_ROUND_DURATION_SECS: usize = 120;

@@ -1,22 +1,23 @@
-use bevy::{prelude::*, utils::HashSet};
-use bevy_ggrs::AddRollbackCommandExtension;
+use bevy::{
+    prelude::{
+        BuildChildren, ChildBuilder, Commands, Entity, NodeBundle, TextBundle, Transform, Vec2,
+    },
+    sprite::{Sprite, SpriteBundle},
+    text::{Text, TextStyle},
+    ui::{PositionType, Style, Val},
+    utils::HashSet,
+};
 use itertools::Itertools;
-use rand::{
-    prelude::{IteratorRandom, SliceRandom},
-    rngs::StdRng,
-    Rng, SeedableRng,
-};
+use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 
-use crate::common::{
-    constants::{COLORS, PIXEL_SCALE},
-    resources::Fonts,
-};
-
-use super::{
-    components::*,
-    constants::*,
-    resources::*,
-    types::{Direction, *},
+use crate::{
+    components::{
+        Destructible, GameTimerDisplay, HUDRoot, PenguinPortraitDisplay, Position, Solid,
+        UIComponent, Wall,
+    },
+    constants::{COLORS, HUD_HEIGHT, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH},
+    resources::{Fonts, GameTextures, HUDColors, MapSize, WorldID},
+    types::Direction,
 };
 
 pub fn get_x(x: isize) -> f32 {
@@ -25,14 +26,6 @@ pub fn get_x(x: isize) -> f32 {
 
 pub fn get_y(y: isize) -> f32 {
     -(TILE_HEIGHT as f32 / 2.0 + (y * TILE_HEIGHT as isize) as f32)
-}
-
-pub fn format_hud_time(remaining_seconds: usize) -> String {
-    format!(
-        "{:02}:{:02}",
-        remaining_seconds / 60,
-        remaining_seconds % 60
-    )
 }
 
 pub fn init_hud(
@@ -115,68 +108,6 @@ pub fn init_hud(
     }
 }
 
-pub fn init_penguin_portraits(
-    parent: &mut ChildBuilder,
-    penguin_tags: &[Penguin],
-    hud_colors: &HUDColors,
-    game_textures: &GameTextures,
-) {
-    for penguin in penguin_tags {
-        parent
-            .spawn((
-                NodeBundle {
-                    style: Style {
-                        position_type: PositionType::Absolute,
-                        left: Val::Px(((5 + 12 * penguin.0) * PIXEL_SCALE) as f32),
-                        top: Val::Px(PIXEL_SCALE as f32),
-                        width: Val::Px(8.0 * PIXEL_SCALE as f32),
-                        height: Val::Px(10.0 * PIXEL_SCALE as f32),
-                        border: UiRect {
-                            left: Val::Px(PIXEL_SCALE as f32),
-                            top: Val::Px(PIXEL_SCALE as f32),
-                            right: Val::Px(PIXEL_SCALE as f32),
-                            bottom: Val::Px(PIXEL_SCALE as f32),
-                        },
-                        ..Default::default()
-                    },
-                    background_color: hud_colors.portrait_border_color.into(),
-                    ..Default::default()
-                },
-                PenguinPortrait(*penguin),
-                UIComponent,
-            ))
-            .with_children(|parent| {
-                parent
-                    .spawn((
-                        NodeBundle {
-                            style: Style {
-                                width: Val::Percent(100.0),
-                                height: Val::Percent(100.0),
-                                ..Default::default()
-                            },
-                            background_color: hud_colors.portrait_background_color.into(),
-                            ..Default::default()
-                        },
-                        UIComponent,
-                    ))
-                    .with_children(|parent| {
-                        parent.spawn((
-                            ImageBundle {
-                                style: Style {
-                                    width: Val::Percent(100.0),
-                                    height: Val::Percent(100.0),
-                                    ..Default::default()
-                                },
-                                image: game_textures.get_penguin_texture(*penguin).clone().into(),
-                                ..Default::default()
-                            },
-                            UIComponent,
-                        ));
-                    });
-            });
-    }
-}
-
 pub fn spawn_map(
     commands: &mut Commands,
     game_textures: &GameTextures,
@@ -184,8 +115,6 @@ pub fn spawn_map(
     percent_of_passable_positions_to_fill: f32,
     spawn_middle_blocks: bool,
     penguin_spawn_positions: &[Position],
-    mob_spawn_positions: &[Position],
-    spawn_exit: bool,
 ) -> Vec<Vec<Entity>> {
     let mut rng = StdRng::seed_from_u64(42);
 
@@ -291,27 +220,6 @@ pub fn spawn_map(
         }
     }
 
-    // reserve room for the mobs (line-shaped)
-    for mob_spawn_position in mob_spawn_positions {
-        destructible_wall_potential_positions.remove(mob_spawn_position);
-
-        for direction in [
-            [Direction::Left, Direction::Right],
-            [Direction::Up, Direction::Down],
-        ]
-        .choose(&mut rng)
-        .unwrap()
-        {
-            for j in 1..3 {
-                let position = mob_spawn_position.offset(*direction, j);
-                if stone_wall_positions.contains(&position) {
-                    break;
-                }
-                destructible_wall_potential_positions.remove(&position);
-            }
-        }
-    }
-
     let num_of_destructible_walls_to_place = (number_of_passable_positions as f32
         * percent_of_passable_positions_to_fill
         / 100.0) as usize;
@@ -321,15 +229,12 @@ pub fn spawn_map(
             destructible_wall_potential_positions.len(),
             num_of_destructible_walls_to_place
         );
-    };
+    }
 
     let destructible_wall_positions = destructible_wall_potential_positions
         .into_iter()
-        .sorted_unstable_by_key(|p| (p.x, p.y))
+        .sorted_by_key(|p| (p.x, p.y))
         .choose_multiple(&mut rng, num_of_destructible_walls_to_place);
-
-    println!("{:?}", destructible_wall_positions);
-
     for position in &destructible_wall_positions {
         let entity = commands
             .spawn((
@@ -347,66 +252,9 @@ pub fn spawn_map(
                 Destructible,
                 *position,
             ))
-            .add_rollback()
             .id();
         wall_entity_reveal_groups.push(vec![entity]);
     }
 
-    if spawn_exit {
-        commands.insert_resource(ExitPosition(
-            *destructible_wall_positions.choose(&mut rng).unwrap(),
-        ));
-    }
-
     wall_entity_reveal_groups
-}
-
-pub fn generate_item_at_position(
-    position: Position,
-    commands: &mut Commands,
-    game_textures: &GameTextures,
-    reduced_loot: bool,
-) {
-    let r = rand::thread_rng().gen::<usize>() % 100;
-
-    /* "Loot tables" */
-    let item = if !reduced_loot {
-        match r {
-            _ if r < 50 => Item::Upgrade(Upgrade::BombsUp),
-            50..=79 => Item::Upgrade(Upgrade::RangeUp),
-            80..=89 => Item::Power(Power::BombPush),
-            90..=93 => Item::Upgrade(Upgrade::LivesUp),
-            94..=97 => Item::Power(Power::WallHack),
-            _ if r >= 98 => Item::Power(Power::Immortal),
-            _ => unreachable!(),
-        }
-    } else {
-        match r {
-            _ if r < 50 => Item::Upgrade(Upgrade::BombsUp),
-            50..=89 => Item::Upgrade(Upgrade::RangeUp),
-            _ if r >= 90 => Item::Power(Power::BombPush),
-            _ => unreachable!(),
-        }
-    };
-
-    commands.spawn((
-        SpriteBundle {
-            texture: match item {
-                Item::Upgrade(Upgrade::BombsUp) => game_textures.bombs_up.clone(),
-                Item::Upgrade(Upgrade::RangeUp) => game_textures.range_up.clone(),
-                Item::Upgrade(Upgrade::LivesUp) => game_textures.lives_up.clone(),
-                Item::Power(Power::WallHack) => game_textures.wall_hack.clone(),
-                Item::Power(Power::BombPush) => game_textures.bomb_push.clone(),
-                Item::Power(Power::Immortal) => game_textures.immortal.clone(),
-            },
-            transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 20.0),
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        position,
-        item,
-    ));
 }
