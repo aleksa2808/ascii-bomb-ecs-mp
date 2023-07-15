@@ -1,5 +1,12 @@
 use bevy::{prelude::*, utils::HashSet, window::PrimaryWindow};
-use bevy_ggrs::{ggrs::PlayerHandle, AddRollbackCommandExtension, PlayerInputs};
+use bevy_ggrs::{
+    ggrs::{PlayerHandle, SessionBuilder},
+    AddRollbackCommandExtension, PlayerInputs, Session,
+};
+use bevy_matchbox::{
+    prelude::{PeerState, SingleChannel},
+    MatchboxSocket,
+};
 
 use crate::{
     components::*,
@@ -8,10 +15,140 @@ use crate::{
         PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
     },
     resources::*,
-    types::Direction,
+    types::{Direction, PlayerInput},
     utils::{get_x, get_y, init_hud, spawn_map},
-    GgrsConfig, PlayerInput,
+    AppState, GGRSConfig,
 };
+
+pub fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
+    let room_id = match &args.room {
+        Some(id) => id.clone(),
+        None => format!("bevy_ggrs?next={}", &args.players),
+    };
+
+    let room_url = format!("{}/{}", &args.matchbox, room_id);
+    info!("connecting to matchbox server: {room_url:?}");
+
+    commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
+}
+
+pub fn lobby_startup(mut commands: Commands, fonts: Res<Fonts>) {
+    commands.spawn(Camera3dBundle::default());
+
+    // All this is just for spawning centered text.
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                position_type: PositionType::Absolute,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::FlexEnd,
+                ..default()
+            },
+            background_color: Color::rgb(0.43, 0.41, 0.38).into(),
+            ..default()
+        })
+        .with_children(|parent| {
+            parent
+                .spawn(TextBundle {
+                    style: Style {
+                        align_self: AlignSelf::Center,
+                        justify_content: JustifyContent::Center,
+                        ..default()
+                    },
+                    text: Text::from_section(
+                        "Entering lobby...",
+                        TextStyle {
+                            font: fonts.mono.clone(),
+                            font_size: 96.,
+                            color: Color::BLACK,
+                        },
+                    ),
+                    ..default()
+                })
+                .insert(LobbyText);
+        })
+        .insert(LobbyUI);
+}
+
+pub fn lobby_cleanup(
+    query: Query<Entity, Or<(With<LobbyUI>, With<Camera3d>)>>,
+    mut commands: Commands,
+) {
+    for e in query.iter() {
+        commands.entity(e).despawn_recursive();
+    }
+}
+
+pub fn lobby_system(
+    mut app_state: ResMut<NextState<AppState>>,
+    args: Res<Args>,
+    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+    mut commands: Commands,
+    mut query: Query<&mut Text, With<LobbyText>>,
+) {
+    // regularly call update_peers to update the list of connected peers
+    for (peer, new_state) in socket.update_peers() {
+        // you can also handle the specific dis(connections) as they occur:
+        match new_state {
+            PeerState::Connected => info!("peer {peer} connected"),
+            PeerState::Disconnected => info!("peer {peer} disconnected"),
+        }
+    }
+
+    let connected_peers = socket.connected_peers().count();
+    let remaining = args.players - (connected_peers + 1);
+    query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);
+    if remaining > 0 {
+        return;
+    }
+
+    info!("All peers have joined, going in-game");
+
+    // extract final player list
+    let players = socket.players();
+
+    let max_prediction = 12;
+
+    // create a GGRS P2P session
+    let mut sess_build = SessionBuilder::<GGRSConfig>::new()
+        .with_num_players(args.players)
+        .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 10 })
+        .with_max_prediction_window(max_prediction)
+        .with_input_delay(2)
+        .with_fps(FPS)
+        .expect("invalid fps");
+
+    for (i, player) in players.into_iter().enumerate() {
+        sess_build = sess_build
+            .add_player(player, i)
+            .expect("failed to add player");
+    }
+
+    let channel = socket.take_channel(0).unwrap();
+
+    // start the GGRS session
+    let sess = sess_build
+        .start_p2p_session(channel)
+        .expect("failed to start session");
+
+    commands.insert_resource(Session::P2P(sess));
+
+    // transition to in-game state
+    app_state.set(AppState::InGame);
+}
+
+pub fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {
+    match session.as_mut() {
+        Session::P2P(s) => {
+            for event in s.events() {
+                info!("GGRS Event: {event:?}");
+            }
+        }
+        _ => panic!("This example focuses on p2p."),
+    }
+}
 
 pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
     frame_count.frame += 1;
@@ -199,7 +336,7 @@ pub fn setup_battle_mode(
 }
 
 pub fn player_move(
-    inputs: Res<PlayerInputs<GgrsConfig>>,
+    inputs: Res<PlayerInputs<GGRSConfig>>,
     mut p: ParamSet<(
         Query<(&mut Transform, &Penguin, &mut Position, &mut Sprite)>,
         Query<&Position, With<Solid>>,
@@ -244,7 +381,7 @@ pub fn player_move(
 
 pub fn bomb_drop(
     mut commands: Commands,
-    inputs: Res<PlayerInputs<GgrsConfig>>,
+    inputs: Res<PlayerInputs<GGRSConfig>>,
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     world_id: Res<WorldID>,

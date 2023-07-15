@@ -1,4 +1,22 @@
 use bevy::{prelude::Color, ui::BackgroundColor};
+use bevy_ggrs::ggrs::Config;
+use bevy_matchbox::prelude::PeerId;
+use bytemuck::{Pod, Zeroable};
+
+#[repr(C)]
+#[derive(Copy, Clone, PartialEq, Eq, Pod, Zeroable)]
+pub struct PlayerInput {
+    pub inp: u8,
+}
+
+#[derive(Debug)]
+pub struct GGRSConfig;
+
+impl Config for GGRSConfig {
+    type Input = PlayerInput;
+    type State = u8;
+    type Address = PeerId;
+}
 
 #[derive(Clone, Copy)]
 pub struct RGBColor(pub u8, pub u8, pub u8);

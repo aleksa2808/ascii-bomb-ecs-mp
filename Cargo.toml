@@ -19,5 +19,6 @@ rand = "0.8"
 itertools = "0.10"
 bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }
 bytemuck = {version = "1.7", features=["derive"]}
-structopt = "0.3"
-bevy_matchbox = { git = "https://github.com/alepez/matchbox", branch = "bevy-0.11", features = ["ggrs"] }
+bevy_matchbox = { path = "../forks/matchbox/bevy_matchbox", features = ["ggrs"] }
+clap = { version = "4.3", features = ["derive"] }
+serde = "1.0"

@@ -1,18 +1,40 @@
-use std::net::SocketAddr;
+use std::ffi::OsString;
 
 use bevy::{prelude::*, text::Font};
-use structopt::StructOpt;
+use clap::Parser;
+use serde::Deserialize;
 
 use crate::{components::Penguin, constants::COLORS};
 
-#[derive(StructOpt, Resource)]
-pub struct Opt {
-    #[structopt(short, long)]
-    pub local_port: u16,
-    #[structopt(short, long)]
-    pub players: Vec<String>,
-    #[structopt(short, long)]
-    pub spectators: Vec<SocketAddr>,
+#[derive(Parser, Debug, Clone, Deserialize, Resource)]
+#[serde(default)]
+#[clap(
+    name = "box_game_web",
+    rename_all = "kebab-case",
+    rename_all_env = "screaming-snake"
+)]
+pub struct Args {
+    #[clap(long, default_value = "ws://127.0.0.1:3536")]
+    pub matchbox: String,
+
+    #[clap(long)]
+    pub room: Option<String>,
+
+    #[clap(long, short, default_value = "2")]
+    pub players: usize,
+}
+
+impl Default for Args {
+    fn default() -> Self {
+        let args = Vec::<OsString>::new();
+        Args::parse_from(args)
+    }
+}
+
+impl Args {
+    pub fn get() -> Self {
+        Args::parse()
+    }
 }
 
 #[derive(Resource)]

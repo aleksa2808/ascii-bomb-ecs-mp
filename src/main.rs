@@ -1,14 +1,5 @@
-use std::net::SocketAddr;
-
-use bevy::{
-    core::{Pod, Zeroable},
-    prelude::*,
-};
-use bevy_ggrs::{
-    ggrs::{Config, PlayerType, SessionBuilder, UdpNonBlockingSocket},
-    GgrsAppExtension, GgrsPlugin, GgrsSchedule, Session,
-};
-use structopt::StructOpt;
+use bevy::prelude::*;
+use bevy_ggrs::{GgrsAppExtension, GgrsPlugin, GgrsSchedule};
 
 mod components;
 mod constants;
@@ -22,22 +13,9 @@ use systems::*;
 use crate::{
     components::{Bomb, BombSatchel, Crumbling, Fire, Position},
     constants::FPS,
-    resources::{Fonts, FrameCount, GameTextures, HUDColors, Opt},
+    resources::{Args, Fonts, FrameCount, GameTextures, HUDColors},
+    types::GGRSConfig,
 };
-
-#[repr(C)]
-#[derive(Copy, Clone, PartialEq, Eq, Pod, Zeroable)]
-pub struct PlayerInput {
-    pub inp: u8,
-}
-
-#[derive(Debug)]
-pub struct GgrsConfig;
-impl Config for GgrsConfig {
-    type Input = PlayerInput;
-    type State = u8;
-    type Address = SocketAddr;
-}
 
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq, Hash, States)]
 pub enum AppState {
@@ -47,8 +25,10 @@ pub enum AppState {
 }
 
 pub fn main() {
-    let mut app = App::new();
+    let args = Args::get();
+    info!("{args:?}");
 
+    let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
@@ -64,45 +44,21 @@ pub fn main() {
             // fixes blurry textures
             .set(ImagePlugin::default_nearest()),
     )
-    .add_state::<AppState>();
-
-    app.init_resource::<Fonts>()
-        .init_resource::<HUDColors>()
-        .init_resource::<GameTextures>();
-
-    // read cmd line arguments
-    let opt = Opt::from_args();
-    let num_players = opt.players.len();
-    assert!(num_players > 0);
-
-    let mut sess_build = SessionBuilder::<GgrsConfig>::new()
-        .with_num_players(2)
-        .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 10 }) // (optional) set how often to exchange state checksums
-        .with_max_prediction_window(12)
-        .with_input_delay(2);
-
-    for (i, player_addr) in opt.players.iter().enumerate() {
-        if player_addr == "localhost" {
-            sess_build = sess_build.add_player(PlayerType::Local, i).unwrap();
-        } else {
-            let remote_addr: SocketAddr = player_addr.parse().unwrap();
-            sess_build = sess_build
-                .add_player(PlayerType::Remote(remote_addr), i)
-                .unwrap();
-        }
-    }
-
-    for (i, spec_addr) in opt.spectators.iter().enumerate() {
-        sess_build = sess_build
-            .add_player(PlayerType::Spectator(*spec_addr), num_players + i)
-            .unwrap();
-    }
-
-    let socket = UdpNonBlockingSocket::bind_to_port(opt.local_port).unwrap();
-    let sess = sess_build.start_p2p_session(socket).unwrap();
+    .init_resource::<Fonts>()
+    .init_resource::<HUDColors>()
+    .init_resource::<GameTextures>()
+    .add_state::<AppState>()
+    .add_systems(
+        OnEnter(AppState::Lobby),
+        (lobby_startup, start_matchbox_socket),
+    )
+    .add_systems(Update, lobby_system.run_if(in_state(AppState::Lobby)))
+    .add_systems(OnExit(AppState::Lobby), lobby_cleanup)
+    .add_systems(OnEnter(AppState::InGame), setup_battle_mode)
+    .add_systems(Update, log_ggrs_events.run_if(in_state(AppState::InGame)));
 
     app.add_ggrs_plugin(
-        GgrsPlugin::<GgrsConfig>::new()
+        GgrsPlugin::<GGRSConfig>::new()
             .with_update_frequency(FPS)
             .with_input_system(input)
             .register_rollback_component::<Transform>()
@@ -113,8 +69,6 @@ pub fn main() {
             .register_rollback_component::<Crumbling>()
             .register_rollback_resource::<FrameCount>(),
     )
-    .insert_resource(opt)
-    .add_systems(Startup, setup_battle_mode)
     .add_systems(
         GgrsSchedule,
         (
@@ -127,7 +81,7 @@ pub fn main() {
         )
             .chain(),
     )
-    .insert_resource(Session::P2P(sess))
+    .insert_resource(args)
     .insert_resource(FrameCount { frame: 0 })
     .run();
 

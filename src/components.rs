@@ -6,6 +6,11 @@ use bevy::{
 use crate::types::Direction;
 
 #[derive(Component)]
+pub struct LobbyText;
+#[derive(Component)]
+pub struct LobbyUI;
+
+#[derive(Component)]
 pub struct UIRoot;
 
 #[derive(Component)]
