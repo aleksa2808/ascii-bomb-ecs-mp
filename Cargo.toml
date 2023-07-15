@@ -16,6 +16,9 @@ cfg-if = "1.0"
 rodio = { version = "0.14", default-features = false, features = ["wav", "vorbis"] }
 anyhow = "1.0"
 itertools = "0.10"
+bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }
+bytemuck = {version = "1.7", features=["derive"]}
+structopt = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bevy = { version = "0.11", default-features = false, features = [

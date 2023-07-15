@@ -1,7 +1,10 @@
 use bevy::{prelude::*, utils::HashSet};
+use bevy_ggrs::AddRollbackCommandExtension;
+use itertools::Itertools;
 use rand::{
     prelude::{IteratorRandom, SliceRandom},
-    Rng,
+    rngs::StdRng,
+    Rng, SeedableRng,
 };
 
 use crate::common::{
@@ -184,7 +187,7 @@ pub fn spawn_map(
     mob_spawn_positions: &[Position],
     spawn_exit: bool,
 ) -> Vec<Vec<Entity>> {
-    let mut rng = rand::thread_rng();
+    let mut rng = StdRng::seed_from_u64(42);
 
     // place empty/passable tiles
     for j in 0..map_size.rows {
@@ -318,11 +321,15 @@ pub fn spawn_map(
             destructible_wall_potential_positions.len(),
             num_of_destructible_walls_to_place
         );
-    }
+    };
 
     let destructible_wall_positions = destructible_wall_potential_positions
         .into_iter()
+        .sorted_unstable_by_key(|p| (p.x, p.y))
         .choose_multiple(&mut rng, num_of_destructible_walls_to_place);
+
+    println!("{:?}", destructible_wall_positions);
+
     for position in &destructible_wall_positions {
         let entity = commands
             .spawn((
@@ -340,6 +347,7 @@ pub fn spawn_map(
                 Destructible,
                 *position,
             ))
+            .add_rollback()
             .id();
         wall_entity_reveal_groups.push(vec![entity]);
     }

@@ -1,4 +1,4 @@
-use bevy::{ecs as bevy_ecs, prelude::*};
+use bevy::{ecs as bevy_ecs, prelude::*, reflect as bevy_reflect};
 
 use super::types::{BotDifficulty, Cooldown, Direction, Power, Upgrade};
 
@@ -12,7 +12,7 @@ pub struct UIComponent;
 
 // game components
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Component)]
+#[derive(Default, Reflect, Debug, Clone, Copy, PartialEq, Eq, Hash, Component)]
 pub struct Position {
     pub y: isize,
     pub x: isize,
@@ -81,7 +81,7 @@ pub struct BaseTexture(pub Handle<Image>);
 #[derive(Component)]
 pub struct ImmortalTexture(pub Handle<Image>);
 
-#[derive(Clone, Component)]
+#[derive(Default, Clone, Reflect, Component)]
 pub struct Bomb {
     pub owner: Option<Entity>,
     pub range: usize,
@@ -94,7 +94,7 @@ pub struct Fuse {
     pub animation_timer: Timer,
 }
 
-#[derive(Component)]
+#[derive(Default, Reflect, Component)]
 pub struct BombSatchel {
     pub bombs_available: usize,
     pub bomb_range: usize,
@@ -130,7 +130,7 @@ pub struct TeamID(pub usize);
 #[derive(Component)]
 pub struct PointValue(pub usize);
 
-#[derive(Component)]
+#[derive(Default, Reflect, Component)]
 pub struct Fire {
     pub timer: Timer,
 }
@@ -144,7 +144,7 @@ pub struct Wall;
 #[derive(Component)]
 pub struct Destructible;
 
-#[derive(Component)]
+#[derive(Default, Reflect, Component)]
 pub struct Crumbling {
     pub timer: Timer,
 }
