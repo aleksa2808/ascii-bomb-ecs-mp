@@ -197,7 +197,7 @@ pub fn run() {
         .init_resource::<GameTextures>();
 
     app.insert_resource(BattleModeConfiguration {
-        amount_of_players: 2,
+        amount_of_players: 4,
         amount_of_bots: 0,
         winning_score: 1,
         bot_difficulty: BotDifficulty::Medium,
@@ -209,7 +209,7 @@ pub fn run() {
     assert!(num_players > 0);
 
     let mut sess_build = SessionBuilder::<GgrsConfig>::new()
-        .with_num_players(2)
+        .with_num_players(4)
         .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 10 }) // (optional) set how often to exchange state checksums
         .with_max_prediction_window(12) // (optional) set max prediction window
         .with_input_delay(2); // (optional) set input delay for the local player
@@ -342,7 +342,12 @@ pub fn spawn_battle_mode_players(
     map_size: MapSize,
     players: &[Penguin],
 ) -> Vec<Position> {
-    let possible_player_spawn_positions = [(1, 1), (map_size.rows - 2, map_size.columns - 2)];
+    let possible_player_spawn_positions = [
+        (1, 1),
+        (map_size.rows - 2, map_size.columns - 2),
+        (1, map_size.columns - 2),
+        (map_size.rows - 2, 1),
+    ];
     let mut possible_player_spawn_positions =
         possible_player_spawn_positions
             .iter()
@@ -442,7 +447,7 @@ pub fn setup_battle_mode(
             );
         });
 
-    let players: Vec<Penguin> = (0..2).map(Penguin).collect();
+    let players: Vec<Penguin> = (0..4).map(Penguin).collect();
 
     // map generation //
     let player_spawn_positions =
@@ -538,7 +543,7 @@ pub fn bomb_drop(
             && !query2.iter().any(|p| *p == *position)
         {
             println!("drop bomb: {:?}", position);
-            // bomb_satchel.bombs_available -= 1;
+            bomb_satchel.bombs_available -= 1;
 
             commands
                 .spawn((
