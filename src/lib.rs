@@ -11,17 +11,16 @@ mod story_mode;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
 
-use audio::Audio;
 use battle_mode::BattleModeConfiguration;
 use bevy::{
     core::{Pod, Zeroable},
     ecs as bevy_ecs,
     prelude::*,
     reflect as bevy_reflect,
-    utils::{HashMap, HashSet},
-    window::{PrimaryWindow, WindowResolution},
+    utils::HashSet,
+    window::PrimaryWindow,
 };
 use bevy_ggrs::{
     ggrs::{Config, PlayerHandle, PlayerType, SessionBuilder, UdpNonBlockingSocket},
@@ -31,13 +30,13 @@ use bevy_ggrs::{
 use common::resources::Fonts;
 use game::{
     components::{
-        BaseTexture, BombPush, BombSatchel, BotAI, BurningItem, Destructible, Health,
-        HumanControlled, ImmortalTexture, MoveCooldown, Penguin, Player, Position, Solid,
-        SpawnPosition, TeamID, UIComponent, UIRoot, Wall, WallHack,
+        BaseTexture, BombSatchel, BurningItem, Destructible, Fuse, Health, HumanControlled,
+        ImmortalTexture, Penguin, Player, Position, Solid, SpawnPosition, TeamID, UIComponent,
+        UIRoot, Wall,
     },
     constants::{HUD_HEIGHT, TILE_HEIGHT, TILE_WIDTH},
-    resources::{GameTextures, GameTimer, HUDColors, MapSize, Sounds, WorldID},
-    types::{BotDifficulty, Cooldown, PlayerAction},
+    resources::{GameTextures, HUDColors, MapSize, WorldID},
+    types::BotDifficulty,
     utils::{get_x, get_y, init_hud, spawn_map},
 };
 #[cfg(target_arch = "wasm32")]
@@ -47,12 +46,7 @@ use structopt::StructOpt;
 
 use crate::{
     audio::AudioPlugin,
-    battle_mode::BattleModePlugin,
-    common::{
-        constants::{COLORS, PIXEL_SCALE},
-        CommonPlugin,
-    },
-    game::{components::Fuse, GamePlugin},
+    common::constants::{COLORS, PIXEL_SCALE},
 };
 #[cfg(target_arch = "wasm32")]
 use crate::{loading::LoadingPlugin, web::*};
@@ -271,7 +265,7 @@ pub fn run() {
     // add your GGRS session
     .insert_resource(Session::P2P(sess))
     .insert_resource(FrameCount { frame: 0 })
-    .add_systems(Update, animate_fuse)
+    // .add_systems(Update, animate_fuse)
     .run();
 
     app.run();
@@ -606,89 +600,89 @@ pub fn bomb_drop(
     }
 }
 
-pub fn animate_fuse(
-    time: Res<Time>,
-    fonts: Res<Fonts>,
-    query: Query<&Bomb>,
-    mut query2: Query<(&Parent, &mut Text, &mut Fuse, &mut Transform)>,
-) {
-    // for (parent, mut text, mut fuse, mut transform) in query2.iter_mut() {
-    //     fuse.animation_timer.tick(time.delta());
-    //     let percent_left = fuse.animation_timer.percent_left();
-    //     let fuse_char = match percent_left {
-    //         _ if (0.0..0.33).contains(&percent_left) => 'x',
-    //         _ if (0.33..0.66).contains(&percent_left) => '+',
-    //         _ if (0.66..=1.0).contains(&percent_left) => '*',
-    //         _ => unreachable!(),
-    //     };
+// pub fn animate_fuse(
+//     time: Res<Time>,
+//     fonts: Res<Fonts>,
+//     query: Query<&Bomb>,
+//     mut query2: Query<(&Parent, &mut Text, &mut Fuse, &mut Transform)>,
+// ) {
+//     // for (parent, mut text, mut fuse, mut transform) in query2.iter_mut() {
+//     //     fuse.animation_timer.tick(time.delta());
+//     //     let percent_left = fuse.animation_timer.percent_left();
+//     //     let fuse_char = match percent_left {
+//     //         _ if (0.0..0.33).contains(&percent_left) => 'x',
+//     //         _ if (0.33..0.66).contains(&percent_left) => '+',
+//     //         _ if (0.66..=1.0).contains(&percent_left) => '*',
+//     //         _ => unreachable!(),
+//     //     };
 
-    //     let bomb = query.get(parent.get()).unwrap();
-    //     let percent_left = bomb.timer.percent_left();
+//     //     let bomb = query.get(parent.get()).unwrap();
+//     //     let percent_left = bomb.timer.percent_left();
 
-    //     match percent_left {
-    //         _ if (0.66..1.0).contains(&percent_left) => {
-    //             text.sections = vec![
-    //                 TextSection {
-    //                     value: fuse_char.into(),
-    //                     style: TextStyle {
-    //                         font: fonts.mono.clone(),
-    //                         font_size: 2.0 * PIXEL_SCALE as f32,
-    //                         color: fuse.color,
-    //                     },
-    //                 },
-    //                 TextSection {
-    //                     value: "┐\n │".into(),
-    //                     style: TextStyle {
-    //                         font: fonts.mono.clone(),
-    //                         font_size: 2.0 * PIXEL_SCALE as f32,
-    //                         color: COLORS[0].into(),
-    //                     },
-    //                 },
-    //             ];
-    //             let translation = &mut transform.translation;
-    //             translation.x = 0.0;
-    //             translation.y = TILE_HEIGHT as f32 / 8.0 * 2.0;
-    //         }
-    //         _ if (0.33..0.66).contains(&percent_left) => {
-    //             text.sections = vec![
-    //                 TextSection {
-    //                     value: fuse_char.into(),
-    //                     style: TextStyle {
-    //                         font: fonts.mono.clone(),
-    //                         font_size: 2.0 * PIXEL_SCALE as f32,
-    //                         color: fuse.color,
-    //                     },
-    //                 },
-    //                 TextSection {
-    //                     value: "\n│".into(),
-    //                     style: TextStyle {
-    //                         font: fonts.mono.clone(),
-    //                         font_size: 2.0 * PIXEL_SCALE as f32,
-    //                         color: COLORS[0].into(),
-    //                     },
-    //                 },
-    //             ];
-    //             let translation = &mut transform.translation;
-    //             translation.x = TILE_WIDTH as f32 / 12.0;
-    //             translation.y = TILE_HEIGHT as f32 / 8.0 * 2.0;
-    //         }
-    //         _ if (0.0..0.33).contains(&percent_left) => {
-    //             text.sections = vec![TextSection {
-    //                 value: fuse_char.into(),
-    //                 style: TextStyle {
-    //                     font: fonts.mono.clone(),
-    //                     font_size: 2.0 * PIXEL_SCALE as f32,
-    //                     color: fuse.color,
-    //                 },
-    //             }];
-    //             let translation = &mut transform.translation;
-    //             translation.x = TILE_WIDTH as f32 / 12.0;
-    //             translation.y = TILE_HEIGHT as f32 / 8.0 * 1.0;
-    //         }
-    //         _ => (),
-    //     }
-    // }
-}
+//     //     match percent_left {
+//     //         _ if (0.66..1.0).contains(&percent_left) => {
+//     //             text.sections = vec![
+//     //                 TextSection {
+//     //                     value: fuse_char.into(),
+//     //                     style: TextStyle {
+//     //                         font: fonts.mono.clone(),
+//     //                         font_size: 2.0 * PIXEL_SCALE as f32,
+//     //                         color: fuse.color,
+//     //                     },
+//     //                 },
+//     //                 TextSection {
+//     //                     value: "┐\n │".into(),
+//     //                     style: TextStyle {
+//     //                         font: fonts.mono.clone(),
+//     //                         font_size: 2.0 * PIXEL_SCALE as f32,
+//     //                         color: COLORS[0].into(),
+//     //                     },
+//     //                 },
+//     //             ];
+//     //             let translation = &mut transform.translation;
+//     //             translation.x = 0.0;
+//     //             translation.y = TILE_HEIGHT as f32 / 8.0 * 2.0;
+//     //         }
+//     //         _ if (0.33..0.66).contains(&percent_left) => {
+//     //             text.sections = vec![
+//     //                 TextSection {
+//     //                     value: fuse_char.into(),
+//     //                     style: TextStyle {
+//     //                         font: fonts.mono.clone(),
+//     //                         font_size: 2.0 * PIXEL_SCALE as f32,
+//     //                         color: fuse.color,
+//     //                     },
+//     //                 },
+//     //                 TextSection {
+//     //                     value: "\n│".into(),
+//     //                     style: TextStyle {
+//     //                         font: fonts.mono.clone(),
+//     //                         font_size: 2.0 * PIXEL_SCALE as f32,
+//     //                         color: COLORS[0].into(),
+//     //                     },
+//     //                 },
+//     //             ];
+//     //             let translation = &mut transform.translation;
+//     //             translation.x = TILE_WIDTH as f32 / 12.0;
+//     //             translation.y = TILE_HEIGHT as f32 / 8.0 * 2.0;
+//     //         }
+//     //         _ if (0.0..0.33).contains(&percent_left) => {
+//     //             text.sections = vec![TextSection {
+//     //                 value: fuse_char.into(),
+//     //                 style: TextStyle {
+//     //                     font: fonts.mono.clone(),
+//     //                     font_size: 2.0 * PIXEL_SCALE as f32,
+//     //                     color: fuse.color,
+//     //                 },
+//     //             }];
+//     //             let translation = &mut transform.translation;
+//     //             translation.x = TILE_WIDTH as f32 / 12.0;
+//     //             translation.y = TILE_HEIGHT as f32 / 8.0 * 1.0;
+//     //         }
+//     //         _ => (),
+//     //     }
+//     // }
+// }
 
 pub fn fire_tick(
     mut commands: Commands,
@@ -717,7 +711,7 @@ pub fn crumbling_tick(
 pub fn explode_bombs(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
-    audio: Res<Audio>,
+    // audio: Res<Audio>,
     // sounds: Res<Sounds>,
     mut p: ParamSet<(
         Query<(Entity, &Bomb, &Position)>,
@@ -734,7 +728,7 @@ pub fn explode_bombs(
     let fireproof_positions: HashSet<Position> = p
         .p1()
         .iter()
-        .filter_map(|(e, p, b)| {
+        .filter_map(|(_, p, b)| {
             // ignore bombs that went off
             if !matches!(b, Some(b) if  frame_count.frame >= b.expiration_frame) {
                 Some(p)
@@ -750,7 +744,7 @@ pub fn explode_bombs(
     let v: Vec<(Entity, Bomb, Position)> = p
         .p0()
         .iter()
-        .filter(|(e, b, _)| frame_count.frame >= b.expiration_frame)
+        .filter(|(_, b, _)| frame_count.frame >= b.expiration_frame)
         .map(|t| (t.0, t.1.clone(), *t.2))
         .collect();
     for (entity, bomb, position) in v {
