@@ -952,6 +952,7 @@ dependencies = [
 [[package]]
 name = "bevy_matchbox"
 version = "0.6.0"
+source = "git+https://github.com/alepez/matchbox?branch=bevy-0.11#c3eafcc3158f04c35240875ac6003249104611a3"
 dependencies = [
  "bevy",
  "cfg-if 1.0.0",
@@ -2885,6 +2886,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.6.0"
+source = "git+https://github.com/alepez/matchbox?branch=bevy-0.11#c3eafcc3158f04c35240875ac6003249104611a3"
 dependencies = [
  "cfg-if 1.0.0",
  "derive_more",
@@ -2895,6 +2897,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.6.1"
+source = "git+https://github.com/alepez/matchbox?branch=bevy-0.11#c3eafcc3158f04c35240875ac6003249104611a3"
 dependencies = [
  "async-compat",
  "async-trait",

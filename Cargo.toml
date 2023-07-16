@@ -12,7 +12,7 @@ rand = "0.8"
 itertools = "0.10"
 bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }
 bytemuck = {version = "1.7", features=["derive"]}
-bevy_matchbox = { path = "../forks/matchbox/bevy_matchbox", features = ["ggrs"] }
+bevy_matchbox = { git = "https://github.com/alepez/matchbox", branch = "bevy-0.11", features = ["ggrs"] }
 cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -44,3 +44,7 @@ bevy = { version = "0.11", default-features = false, features = [
 once_cell = "1.8.0"
 parking_lot = "0.12"
 wasm-bindgen = "0.2"
+
+[patch.crates-io]
+ggrs = { git = "https://github.com/gschup/ggrs" }
+bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }
