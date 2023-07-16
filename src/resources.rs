@@ -1,6 +1,6 @@
 use std::ffi::OsString;
 
-use bevy::{prelude::*, text::Font};
+use bevy::{ecs as bevy_ecs, prelude::*, reflect as bevy_reflect, text::Font};
 use clap::Parser;
 use serde::Deserialize;
 

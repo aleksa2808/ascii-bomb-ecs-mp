@@ -3,7 +3,20 @@ name = "ascii-bomb-ecs"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "ascii_bomb_ecs_lib"
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
+rand = "0.8"
+itertools = "0.10"
+bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }
+bytemuck = {version = "1.7", features=["derive"]}
+bevy_matchbox = { path = "../forks/matchbox/bevy_matchbox", features = ["ggrs"] }
+clap = { version = "4.3", features = ["derive"] }
+serde = "1.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bevy = { version = "0.11", default-features = false, features = [
     "dynamic_linking",
     "bevy_winit",
@@ -15,10 +28,17 @@ bevy = { version = "0.11", default-features = false, features = [
     "x11",
     "bevy_asset",
 ] }
-rand = "0.8"
-itertools = "0.10"
-bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }
-bytemuck = {version = "1.7", features=["derive"]}
-bevy_matchbox = { path = "../forks/matchbox/bevy_matchbox", features = ["ggrs"] }
-clap = { version = "4.3", features = ["derive"] }
-serde = "1.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+bevy = { version = "0.11", default-features = false, features = [
+    "bevy_winit",
+    "png",
+    "bevy_core_pipeline",
+    "bevy_sprite",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_asset",
+    "webgl2",
+] }
+once_cell = "1.8.0"
+wasm-bindgen = "0.2"
