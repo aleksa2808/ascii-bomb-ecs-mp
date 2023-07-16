@@ -1,8 +1,5 @@
 use bevy::{prelude::*, utils::HashSet, window::PrimaryWindow};
-use bevy_ggrs::{
-    ggrs::{PlayerHandle, SessionBuilder},
-    AddRollbackCommandExtension, PlayerInputs, Session,
-};
+use bevy_ggrs::{ggrs::SessionBuilder, AddRollbackCommandExtension, PlayerInputs, Session};
 use bevy_matchbox::{
     prelude::{PeerState, SingleChannel},
     MatchboxSocket,
@@ -15,18 +12,21 @@ use crate::{
         PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
     },
     resources::*,
-    types::{Direction, PlayerInput},
+    types::Direction,
     utils::{get_x, get_y, init_hud, spawn_map},
     AppState, GGRSConfig,
 };
 
-pub fn start_matchbox_socket(mut commands: Commands, args: Res<Args>) {
-    let room_id = match &args.room {
+pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<MatchboxConfig>) {
+    let room_id = match &matchbox_config.room {
         Some(id) => id.clone(),
-        None => format!("bevy_ggrs?next={}", &args.players),
+        None => format!(
+            "ascii_bomb_ecs_mp?next={}",
+            &matchbox_config.number_of_players
+        ),
     };
 
-    let room_url = format!("{}/{}", &args.matchbox, room_id);
+    let room_url = format!("{}/{}", &matchbox_config.signal_server_address, room_id);
     info!("connecting to matchbox server: {room_url:?}");
 
     commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
@@ -83,7 +83,7 @@ pub fn lobby_cleanup(
 
 pub fn lobby_system(
     mut app_state: ResMut<NextState<AppState>>,
-    args: Res<Args>,
+    matchbox_config: Res<MatchboxConfig>,
     mut socket: ResMut<MatchboxSocket<SingleChannel>>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
@@ -98,7 +98,7 @@ pub fn lobby_system(
     }
 
     let connected_peers = socket.connected_peers().count();
-    let remaining = args.players - (connected_peers + 1);
+    let remaining = matchbox_config.number_of_players - (connected_peers + 1);
     query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);
     if remaining > 0 {
         return;
@@ -113,7 +113,7 @@ pub fn lobby_system(
 
     // create a GGRS P2P session
     let mut sess_build = SessionBuilder::<GGRSConfig>::new()
-        .with_num_players(args.players)
+        .with_num_players(matchbox_config.number_of_players)
         .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 10 })
         .with_max_prediction_window(max_prediction)
         .with_input_delay(2)
@@ -152,35 +152,6 @@ pub fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {
 
 pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
     frame_count.frame += 1;
-}
-
-pub fn input(
-    _handle: In<PlayerHandle>,
-    mut r: Local<u8>,
-    keyboard_input: Res<Input<KeyCode>>,
-) -> PlayerInput {
-    let mut input: u8 = 0;
-
-    if keyboard_input.pressed(KeyCode::Up) {
-        input |= INPUT_UP;
-    }
-    if keyboard_input.pressed(KeyCode::Left) {
-        input |= INPUT_LEFT;
-    }
-    if keyboard_input.pressed(KeyCode::Down) {
-        input |= INPUT_DOWN;
-    }
-    if keyboard_input.pressed(KeyCode::Right) {
-        input |= INPUT_RIGHT;
-    }
-    if keyboard_input.pressed(KeyCode::Space) {
-        input |= INPUT_ACTION;
-    }
-
-    let inp = !*r & input;
-    *r = input;
-
-    PlayerInput { inp }
 }
 
 pub fn get_battle_mode_map_size_fill(player_count: usize) -> (MapSize, f32) {
@@ -273,13 +244,13 @@ pub fn setup_battle_mode(
     fonts: Res<Fonts>,
     hud_colors: Res<HUDColors>,
     mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
-    args: Res<Args>,
+    matchbox_config: Res<MatchboxConfig>,
 ) {
     let world_id = WorldID(1);
     game_textures.set_map_textures(world_id);
 
     let (map_size, percent_of_passable_positions_to_fill) =
-        get_battle_mode_map_size_fill(args.players);
+        get_battle_mode_map_size_fill(matchbox_config.number_of_players);
 
     // spawn HUD
     commands
@@ -309,7 +280,9 @@ pub fn setup_battle_mode(
             );
         });
 
-    let players: Vec<Penguin> = (0..args.players).map(Penguin).collect();
+    let players: Vec<Penguin> = (0..matchbox_config.number_of_players)
+        .map(Penguin)
+        .collect();
 
     // map generation //
     let player_spawn_positions =
@@ -481,8 +454,6 @@ pub fn crumbling_tick(
 pub fn explode_bombs(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
-    // audio: Res<Audio>,
-    // sounds: Res<Sounds>,
     mut p: ParamSet<(
         Query<(Entity, &Bomb, &Position)>,
         Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
@@ -509,8 +480,6 @@ pub fn explode_bombs(
         .copied()
         .collect();
 
-    let mut sound_played = false;
-
     let v: Vec<(Entity, Bomb, Position)> = p
         .p0()
         .iter()
@@ -518,17 +487,13 @@ pub fn explode_bombs(
         .map(|t| (t.0, t.1.clone(), *t.2))
         .collect();
     for (entity, bomb, position) in v {
+        // TODO: this sometimes doesn't clear the fuse, not sure when, maybe in a rollback
         commands.entity(entity).despawn_recursive();
 
         if let Some(owner) = bomb.owner {
             if let Ok(mut bomb_satchel) = query3.get_mut(owner) {
                 bomb_satchel.bombs_available += 1;
             }
-        }
-
-        if !sound_played {
-            // audio.play(sounds.boom);
-            sound_played = true;
         }
 
         let spawn_fire = |commands: &mut Commands, position: Position| {

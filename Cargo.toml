@@ -13,8 +13,7 @@ itertools = "0.10"
 bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }
 bytemuck = {version = "1.7", features=["derive"]}
 bevy_matchbox = { path = "../forks/matchbox/bevy_matchbox", features = ["ggrs"] }
-clap = { version = "4.3", features = ["derive"] }
-serde = "1.0"
+cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bevy = { version = "0.11", default-features = false, features = [
@@ -28,6 +27,8 @@ bevy = { version = "0.11", default-features = false, features = [
     "x11",
     "bevy_asset",
 ] }
+clap = { version = "4.3", features = ["derive"] }
+serde = "1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 bevy = { version = "0.11", default-features = false, features = [
@@ -41,4 +42,5 @@ bevy = { version = "0.11", default-features = false, features = [
     "webgl2",
 ] }
 once_cell = "1.8.0"
+parking_lot = "0.12"
 wasm-bindgen = "0.2"

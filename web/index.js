@@ -1,10 +1,13 @@
-import init from "./ascii_bomb_ecs_lib.js";
+import init, { run, start_game, set_input_active } from "./ascii_bomb_ecs_lib.js";
 
-let wasm = undefined;
-init("./ascii_bomb_ecs_lib_bg.wasm").then(function (_wasm) {
-    wasm = _wasm;
+let wasm_loaded = false;
+async function start_wasm() {
+    await init();
+    wasm_loaded = true;
+
     try {
-        wasm.run();
+        run();
+        // TODO: enable start game button
     } catch (e) {
         // the winit crate throws an exception for control flow, which should be ignored
         if (!e.message.includes("This isn't actually an error!")) {
@@ -14,7 +17,8 @@ init("./ascii_bomb_ecs_lib_bg.wasm").then(function (_wasm) {
             document.getElementById('error-screen').removeAttribute("hidden");
         }
     }
-});
+}
+start_wasm();
 
 const isTouchDevice = 'ontouchstart' in document.documentElement;
 
@@ -107,6 +111,23 @@ document.addEventListener('dblclick', function (event) {
 }, { passive: false });
 
 function startGame() {
+    var signal_server_address = document.getElementById("urlInput").value;
+    var number_of_players = parseInt(document.getElementById("numberInput").value);
+
+    // Validate web address input
+    if (signal_server_address.trim() === "") {
+        alert("Please enter a web address.");
+        return;
+    }
+
+    // Validate number input
+    if (number_of_players < 2 || number_of_players > 8) {
+        alert("Please enter a number between 2 and 8.");
+        return;
+    }
+
+    console.log(signal_server_address, number_of_players);
+
     document.getElementById('button-box').remove();
     document.getElementById('game-container').removeAttribute("hidden");
 
@@ -139,12 +160,12 @@ function startGame() {
     updateCanvasContainerSize();
 
     canvas.focus();
-    wasm.start_game();
+    start_game(signal_server_address, number_of_players);
 }
 window.startGame = startGame
 
 function setInputActive(input) {
-    wasm.set_input_active(input);
+    set_input_active(input);
 }
 window.setInputActive = setInputActive
 

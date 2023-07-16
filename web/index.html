@@ -17,8 +17,14 @@
 
 <body>
     <div id="button-box">
-        <a id="button-loading" class="btn grey">Loading...</a>
-        <a id="button-start" class="btn" onclick="startGame()" hidden>Start game</a>
+        <form>
+            <input type="text" id="urlInput" name="url" placeholder="signal server address" value="ws://127.0.0.1:3536"
+                required>
+            <br><br>
+            <input type="number" id="numberInput" name="number" min="2" max="8" value="2" required>
+            <br><br>
+            <button type="button" onclick="startGame()">Start game</button>
+        </form>
     </div>
     <div id="game-container" hidden>
         <div id="canvas-container">

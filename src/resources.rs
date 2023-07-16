@@ -1,40 +1,12 @@
-use std::ffi::OsString;
-
 use bevy::{ecs as bevy_ecs, prelude::*, reflect as bevy_reflect, text::Font};
-use clap::Parser;
-use serde::Deserialize;
 
 use crate::{components::Penguin, constants::COLORS};
 
-#[derive(Parser, Debug, Clone, Deserialize, Resource)]
-#[serde(default)]
-#[clap(
-    name = "box_game_web",
-    rename_all = "kebab-case",
-    rename_all_env = "screaming-snake"
-)]
-pub struct Args {
-    #[clap(long, default_value = "ws://127.0.0.1:3536")]
-    pub matchbox: String,
-
-    #[clap(long)]
+#[derive(Resource)]
+pub struct MatchboxConfig {
+    pub signal_server_address: String,
     pub room: Option<String>,
-
-    #[clap(long, short, default_value = "2")]
-    pub players: usize,
-}
-
-impl Default for Args {
-    fn default() -> Self {
-        let args = Vec::<OsString>::new();
-        Args::parse_from(args)
-    }
-}
-
-impl Args {
-    pub fn get() -> Self {
-        Args::parse()
-    }
+    pub number_of_players: usize,
 }
 
 #[derive(Resource)]

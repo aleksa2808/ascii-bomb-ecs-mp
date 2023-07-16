@@ -1,9 +1,13 @@
 mod components;
 mod constants;
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
 mod resources;
 mod systems;
 mod types;
 mod utils;
+#[cfg(target_arch = "wasm32")]
+mod web;
 
 use bevy::{ecs as bevy_ecs, prelude::*};
 use bevy_ggrs::{GgrsAppExtension, GgrsPlugin, GgrsSchedule};
@@ -11,24 +15,43 @@ use bevy_ggrs::{GgrsAppExtension, GgrsPlugin, GgrsSchedule};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
+use crate::web::{web_input, web_ready_to_start_update};
 use crate::{
     components::{Bomb, BombSatchel, Crumbling, Fire, Position},
     constants::FPS,
-    resources::{Args, Fonts, FrameCount, GameTextures, HUDColors},
+    resources::{Fonts, FrameCount, GameTextures, HUDColors},
     systems::*,
     types::GGRSConfig,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use crate::{native::{Args, native_input}, resources::MatchboxConfig};
 
-#[derive(Default, Debug, Copy, Clone, Eq, PartialEq, Hash, States)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, States)]
 pub enum AppState {
-    #[default]
+    #[cfg(target_arch = "wasm32")]
+    WebReadyToStart,
     Lobby,
     InGame,
 }
 
+impl Default for AppState {
+    fn default() -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+                Self::WebReadyToStart
+            } else {
+                Self::Lobby
+            }
+        }
+    }
+}
+
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn run() {
+    #[cfg(not(target_arch = "wasm32"))]
     let args = Args::get();
+    #[cfg(not(target_arch = "wasm32"))]
     info!("{args:?}");
 
     let mut app = App::new();
@@ -60,10 +83,28 @@ pub fn run() {
     .add_systems(OnEnter(AppState::InGame), setup_battle_mode)
     .add_systems(Update, log_ggrs_events.run_if(in_state(AppState::InGame)));
 
+    #[cfg(not(target_arch = "wasm32"))]
+    app.insert_resource(MatchboxConfig {
+        signal_server_address: args.signal_server_address,
+        room: args.room,
+        number_of_players: args.number_of_players,
+    });
+
+    #[cfg(target_arch = "wasm32")]
+    app.add_systems(
+        Update,
+        web_ready_to_start_update.run_if(in_state(AppState::WebReadyToStart)),
+    );
+
+    #[cfg(target_arch = "wasm32")]
+    let input_fn = web_input;
+    #[cfg(not(target_arch = "wasm32"))]
+    let input_fn = native_input;
+
     app.add_ggrs_plugin(
         GgrsPlugin::<GGRSConfig>::new()
             .with_update_frequency(FPS)
-            .with_input_system(input)
+            .with_input_system(input_fn)
             .register_rollback_component::<Transform>()
             .register_rollback_component::<Position>()
             .register_rollback_component::<Bomb>()
@@ -84,7 +125,6 @@ pub fn run() {
         )
             .chain(),
     )
-    .insert_resource(args)
     .insert_resource(FrameCount { frame: 0 })
     .run();
 
