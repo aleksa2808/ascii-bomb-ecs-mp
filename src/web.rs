@@ -19,8 +19,7 @@ static INPUTS: Lazy<RwLock<VecDeque<u8>>> = Lazy::new(|| RwLock::new(VecDeque::n
 // functions callable from JavaScript
 #[wasm_bindgen]
 #[allow(dead_code)]
-pub fn start_game(signal_server_address: &str) {
-    let number_of_players = 2;
+pub fn start_game(signal_server_address: &str, number_of_players: usize) {
     info!("start_game: {signal_server_address} {number_of_players}");
     let mut start = START.write();
     *start = Some((signal_server_address.to_string(), number_of_players));
