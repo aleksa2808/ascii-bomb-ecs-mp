@@ -493,7 +493,6 @@ pub fn explode_bombs(
         .map(|t| (t.0, t.1.clone(), *t.2))
         .collect();
     for (entity, bomb, position) in v {
-        // TODO: this sometimes doesn't clear the fuse, not sure when, maybe in a rollback
         commands.entity(entity).despawn_recursive();
 
         if let Some(owner) = bomb.owner {
