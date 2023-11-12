@@ -417,11 +417,17 @@ pub fn bomb_drop(
                         },
                     });
 
-                    parent.spawn((Text2dBundle {
-                        text,
-                        transform: Transform::from_xyz(0.0, TILE_HEIGHT as f32 / 8.0 * 2.0, 0.0),
-                        ..Default::default()
-                    },));
+                    parent
+                        .spawn((Text2dBundle {
+                            text,
+                            transform: Transform::from_xyz(
+                                0.0,
+                                TILE_HEIGHT as f32 / 8.0 * 2.0,
+                                0.0,
+                            ),
+                            ..Default::default()
+                        },))
+                        .add_rollback();
                 });
         }
     }

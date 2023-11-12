@@ -7,6 +7,7 @@ use bevy::{
     ui::{PositionType, Style, Val},
     utils::HashSet,
 };
+use bevy_ggrs::AddRollbackCommandExtension;
 use itertools::Itertools;
 use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 
@@ -252,6 +253,7 @@ pub fn spawn_map(
                 Destructible,
                 *position,
             ))
+            .add_rollback()
             .id();
         wall_entity_reveal_groups.push(vec![entity]);
     }
