@@ -152,3 +152,12 @@ impl FromWorld for GameTextures {
 pub struct FrameCount {
     pub frame: usize,
 }
+
+#[derive(Resource)]
+pub enum RoundOutcome {
+    Winner(Penguin),
+    Tie,
+}
+
+#[derive(Resource)]
+pub struct FreezeEndFrame(pub usize);

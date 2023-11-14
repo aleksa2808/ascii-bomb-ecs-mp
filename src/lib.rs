@@ -25,7 +25,10 @@ use crate::{
     types::GGRSConfig,
 };
 #[cfg(not(target_arch = "wasm32"))]
-use crate::{native::{Args, native_input}, resources::MatchboxConfig};
+use crate::{
+    native::{native_input, Args},
+    resources::MatchboxConfig,
+};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, States)]
 pub enum AppState {
@@ -117,11 +120,20 @@ pub fn run() {
         GgrsSchedule,
         (
             increase_frame_system,
+            leaderboard_display,
+            apply_deferred,
             player_move,
             bomb_drop,
+            apply_deferred,
             fire_tick,
+            apply_deferred,
             crumbling_tick,
+            apply_deferred,
             explode_bombs,
+            apply_deferred,
+            player_burn,
+            apply_deferred,
+            finish_round,
         )
             .chain(),
     )

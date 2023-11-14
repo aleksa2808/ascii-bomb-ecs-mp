@@ -13,8 +13,8 @@ use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 
 use crate::{
     components::{
-        Destructible, GameTimerDisplay, HUDRoot, PenguinPortraitDisplay, Position, Solid,
-        UIComponent, Wall,
+        BombSatchel, Destructible, GameTimerDisplay, HUDRoot, Penguin, PenguinPortraitDisplay,
+        Player, Position, Solid, UIComponent, Wall,
     },
     constants::{COLORS, HUD_HEIGHT, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH},
     resources::{Fonts, GameTextures, HUDColors, MapSize, WorldID},
@@ -259,4 +259,88 @@ pub fn spawn_map(
     }
 
     wall_entity_reveal_groups
+}
+
+pub fn get_battle_mode_map_size_fill(player_count: usize) -> (MapSize, f32) {
+    if player_count > 4 {
+        (
+            MapSize {
+                rows: 13,
+                columns: 17,
+            },
+            70.0,
+        )
+    } else {
+        (
+            MapSize {
+                rows: 11,
+                columns: 15,
+            },
+            60.0,
+        )
+    }
+}
+
+pub fn spawn_battle_mode_players(
+    commands: &mut Commands,
+    game_textures: &GameTextures,
+    map_size: MapSize,
+    players: &[Penguin],
+) -> Vec<Position> {
+    let possible_player_spawn_positions = [
+        (1, 1),
+        (map_size.rows - 2, map_size.columns - 2),
+        (1, map_size.columns - 2),
+        (map_size.rows - 2, 1),
+        (3, 5),
+        (map_size.rows - 4, map_size.columns - 6),
+        (3, map_size.columns - 6),
+        (map_size.rows - 4, 5),
+    ];
+    let mut possible_player_spawn_positions =
+        possible_player_spawn_positions
+            .iter()
+            .map(|(y, x)| Position {
+                y: *y as isize,
+                x: *x as isize,
+            });
+
+    let mut player_spawn_positions = vec![];
+
+    let mut spawn_player = |penguin_tag: Penguin| {
+        let player_spawn_position = possible_player_spawn_positions.next().unwrap();
+        let base_texture = game_textures.get_penguin_texture(penguin_tag).clone();
+        commands
+            .spawn((
+                SpriteBundle {
+                    texture: base_texture.clone(),
+                    transform: Transform::from_xyz(
+                        get_x(player_spawn_position.x),
+                        get_y(player_spawn_position.y),
+                        50.0,
+                    ),
+                    sprite: Sprite {
+                        custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                Player,
+                penguin_tag,
+                player_spawn_position,
+                BombSatchel {
+                    bombs_available: 10,
+                    bomb_range: 2,
+                },
+            ))
+            .add_rollback();
+
+        player_spawn_positions.push(player_spawn_position);
+    };
+
+    for penguin_tag in players {
+        spawn_player(*penguin_tag);
+    }
+
+    player_spawn_positions
 }
