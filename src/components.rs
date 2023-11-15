@@ -3,6 +3,7 @@ use bevy::{
     prelude::{Component, Entity},
     reflect as bevy_reflect,
     reflect::Reflect,
+    render::color::Color,
 };
 
 use crate::types::Direction;
@@ -56,6 +57,12 @@ pub struct Bomb {
     pub owner: Option<Entity>,
     pub range: usize,
     pub expiration_frame: usize,
+}
+
+#[derive(Component)]
+pub struct Fuse {
+    pub color: Color,
+    pub start_frame: usize,
 }
 
 #[derive(Default, Reflect, Component)]

@@ -136,6 +136,7 @@ pub fn run() {
             apply_deferred,
             explode_bombs,
             apply_deferred,
+            animate_fuse,
             player_burn,
             apply_deferred,
             finish_round,

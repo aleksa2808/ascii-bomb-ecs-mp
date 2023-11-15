@@ -415,17 +415,112 @@ pub fn bomb_drop(
                     });
 
                     parent
-                        .spawn((Text2dBundle {
-                            text,
-                            transform: Transform::from_xyz(
-                                0.0,
-                                TILE_HEIGHT as f32 / 8.0 * 2.0,
-                                0.0,
-                            ),
-                            ..Default::default()
-                        },))
+                        .spawn((
+                            Text2dBundle {
+                                text,
+                                transform: Transform::from_xyz(
+                                    0.0,
+                                    TILE_HEIGHT as f32 / 8.0 * 2.0,
+                                    0.0,
+                                ),
+                                ..Default::default()
+                            },
+                            Fuse {
+                                color: fuse_color,
+                                start_frame: frame_count.frame,
+                            },
+                        ))
                         .add_rollback();
                 });
+        }
+    }
+}
+
+pub fn animate_fuse(
+    frame_count: Res<FrameCount>,
+    fonts: Res<Fonts>,
+    query: Query<&Bomb>,
+    mut query2: Query<(&Parent, &mut Text, &Fuse, &mut Transform)>,
+) {
+    for (parent, mut text, fuse, mut transform) in query2.iter_mut() {
+        const FUSE_ANIMATION_FRAME_COUNT: usize = (FPS as f32 * 0.1) as usize;
+        // TODO double check calculation
+        let percent_left = (FUSE_ANIMATION_FRAME_COUNT
+            - (frame_count.frame - fuse.start_frame) % FUSE_ANIMATION_FRAME_COUNT)
+            as f32
+            / FUSE_ANIMATION_FRAME_COUNT as f32;
+        let fuse_char = match percent_left {
+            _ if (0.0..0.33).contains(&percent_left) => 'x',
+            _ if (0.33..0.66).contains(&percent_left) => '+',
+            _ if (0.66..=1.0).contains(&percent_left) => '*',
+            _ => unreachable!(),
+        };
+
+        let bomb = query.get(parent.get()).unwrap();
+        let percent_left = (bomb.expiration_frame - frame_count.frame) as f32
+            / (bomb.expiration_frame - fuse.start_frame) as f32;
+
+        match percent_left {
+            _ if (0.66..1.0).contains(&percent_left) => {
+                text.sections = vec![
+                    TextSection {
+                        value: fuse_char.into(),
+                        style: TextStyle {
+                            font: fonts.mono.clone(),
+                            font_size: 2.0 * PIXEL_SCALE as f32,
+                            color: fuse.color,
+                        },
+                    },
+                    TextSection {
+                        value: "┐\n │".into(),
+                        style: TextStyle {
+                            font: fonts.mono.clone(),
+                            font_size: 2.0 * PIXEL_SCALE as f32,
+                            color: COLORS[0].into(),
+                        },
+                    },
+                ];
+                let translation = &mut transform.translation;
+                translation.x = 0.0;
+                translation.y = TILE_HEIGHT as f32 / 8.0 * 2.0;
+            }
+            _ if (0.33..0.66).contains(&percent_left) => {
+                text.sections = vec![
+                    TextSection {
+                        value: fuse_char.into(),
+                        style: TextStyle {
+                            font: fonts.mono.clone(),
+                            font_size: 2.0 * PIXEL_SCALE as f32,
+                            color: fuse.color,
+                        },
+                    },
+                    TextSection {
+                        value: "\n│".into(),
+                        style: TextStyle {
+                            font: fonts.mono.clone(),
+                            font_size: 2.0 * PIXEL_SCALE as f32,
+                            color: COLORS[0].into(),
+                        },
+                    },
+                ];
+                let translation = &mut transform.translation;
+                translation.x = TILE_WIDTH as f32 / 12.0;
+                translation.y = TILE_HEIGHT as f32 / 8.0 * 2.0;
+            }
+            _ if (0.0..0.33).contains(&percent_left) => {
+                text.sections = vec![TextSection {
+                    value: fuse_char.into(),
+                    style: TextStyle {
+                        font: fonts.mono.clone(),
+                        font_size: 2.0 * PIXEL_SCALE as f32,
+                        color: fuse.color,
+                    },
+                }];
+                let translation = &mut transform.translation;
+                translation.x = TILE_WIDTH as f32 / 12.0;
+                translation.y = TILE_HEIGHT as f32 / 8.0 * 1.0;
+            }
+            _ => (),
         }
     }
 }
