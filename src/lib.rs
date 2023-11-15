@@ -126,6 +126,7 @@ pub fn run() {
             show_leaderboard,
             start_new_round,
             start_new_tournament,
+            update_hud_clock,
             apply_deferred,
             player_move,
             bomb_drop,

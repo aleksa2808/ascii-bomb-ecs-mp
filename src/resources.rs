@@ -169,6 +169,9 @@ pub enum RoundOutcome {
     Winner(Penguin),
 }
 
+#[derive(Resource)]
+pub struct GameEndFrame(pub usize);
+
 #[derive(Resource, Reflect, Default)]
 pub struct FreezeEndFrame(pub usize);
 

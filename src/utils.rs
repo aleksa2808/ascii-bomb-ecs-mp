@@ -2,7 +2,7 @@ use bevy::{
     prelude::{BuildChildren, ChildBuilder, Commands, NodeBundle, TextBundle, Transform, Vec2},
     sprite::{Sprite, SpriteBundle},
     text::{Text, TextStyle},
-    ui::{PositionType, Style, Val},
+    ui::{node_bundles::ImageBundle, PositionType, Style, UiRect, Val},
     utils::HashSet,
 };
 use bevy_ggrs::AddRollbackCommandExtension;
@@ -11,10 +11,12 @@ use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 
 use crate::{
     components::{
-        Destructible, GameTimerDisplay, HUDRoot, PenguinPortraitDisplay, Position, Solid,
-        UIComponent, Wall,
+        Destructible, GameTimerDisplay, HUDRoot, Penguin, PenguinPortrait, PenguinPortraitDisplay,
+        Position, Solid, UIComponent, Wall,
     },
-    constants::{COLORS, HUD_HEIGHT, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH},
+    constants::{
+        BATTLE_MODE_ROUND_DURATION_SECS, COLORS, HUD_HEIGHT, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
+    },
     resources::{Fonts, GameTextures, HUDColors, MapSize, WorldID},
     types::Direction,
 };
@@ -27,39 +29,43 @@ pub fn get_y(y: isize) -> f32 {
     -(TILE_HEIGHT as f32 / 2.0 + (y * TILE_HEIGHT as isize) as f32)
 }
 
+pub fn format_hud_time(remaining_seconds: usize) -> String {
+    format!(
+        "{:02}:{:02}",
+        remaining_seconds / 60,
+        remaining_seconds % 60
+    )
+}
+
 pub fn init_hud(
     parent: &mut ChildBuilder,
     hud_colors: &HUDColors,
     fonts: &Fonts,
     width: f32,
     world_id: WorldID,
-    with_penguin_portrait_display: bool,
-    with_clock: bool,
-    extra_item_fn: Option<&dyn Fn(&mut ChildBuilder)>,
+    game_textures: &GameTextures,
+    penguin_tags: &[Penguin],
 ) {
-    let mut ec = parent.spawn((
-        NodeBundle {
-            style: Style {
-                position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                top: Val::Px(0.0),
-                width: Val::Px(width),
-                height: Val::Px(HUD_HEIGHT as f32),
+    parent
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    top: Val::Px(0.0),
+                    width: Val::Px(width),
+                    height: Val::Px(HUD_HEIGHT as f32),
+                    ..Default::default()
+                },
+                background_color: hud_colors.get_background_color(world_id).into(),
                 ..Default::default()
             },
-            background_color: hud_colors.get_background_color(world_id).into(),
-            ..Default::default()
-        },
-        UIComponent,
-        HUDRoot,
-    ));
-    ec.with_children(|parent| {
-        if let Some(extra_item_fn) = extra_item_fn {
-            extra_item_fn(parent);
-        }
-
-        if with_clock {
-            // clock / pause indicator
+            UIComponent,
+            HUDRoot,
+            PenguinPortraitDisplay,
+        ))
+        .with_children(|parent| {
+            // clock
             parent
                 .spawn((
                     NodeBundle {
@@ -80,7 +86,7 @@ pub fn init_hud(
                     parent.spawn((
                         TextBundle {
                             text: Text::from_section(
-                                "",
+                                format_hud_time(BATTLE_MODE_ROUND_DURATION_SECS),
                                 TextStyle {
                                     font: fonts.mono.clone(),
                                     font_size: 2.0 * PIXEL_SCALE as f32,
@@ -99,12 +105,70 @@ pub fn init_hud(
                         GameTimerDisplay,
                     ));
                 });
-        }
-    });
 
-    if with_penguin_portrait_display {
-        ec.insert(PenguinPortraitDisplay);
-    }
+            // player portraits
+            for penguin in penguin_tags {
+                parent
+                    .spawn((
+                        NodeBundle {
+                            style: Style {
+                                position_type: PositionType::Absolute,
+                                left: Val::Px(((5 + 12 * penguin.0) * PIXEL_SCALE) as f32),
+                                top: Val::Px(PIXEL_SCALE as f32),
+                                width: Val::Px(8.0 * PIXEL_SCALE as f32),
+                                height: Val::Px(10.0 * PIXEL_SCALE as f32),
+                                border: UiRect {
+                                    left: Val::Px(PIXEL_SCALE as f32),
+                                    top: Val::Px(PIXEL_SCALE as f32),
+                                    right: Val::Px(PIXEL_SCALE as f32),
+                                    bottom: Val::Px(PIXEL_SCALE as f32),
+                                },
+                                ..Default::default()
+                            },
+                            background_color: hud_colors.portrait_border_color.into(),
+                            ..Default::default()
+                        },
+                        PenguinPortrait(*penguin),
+                        UIComponent,
+                    ))
+                    .add_rollback()
+                    .with_children(|parent| {
+                        parent
+                            .spawn((
+                                NodeBundle {
+                                    style: Style {
+                                        width: Val::Percent(100.0),
+                                        height: Val::Percent(100.0),
+                                        ..Default::default()
+                                    },
+                                    background_color: hud_colors.portrait_background_color.into(),
+                                    ..Default::default()
+                                },
+                                UIComponent,
+                            ))
+                            .add_rollback()
+                            .with_children(|parent| {
+                                parent
+                                    .spawn((
+                                        ImageBundle {
+                                            style: Style {
+                                                width: Val::Percent(100.0),
+                                                height: Val::Percent(100.0),
+                                                ..Default::default()
+                                            },
+                                            image: game_textures
+                                                .get_penguin_texture(*penguin)
+                                                .clone()
+                                                .into(),
+                                            ..Default::default()
+                                        },
+                                        UIComponent,
+                                    ))
+                                    .add_rollback();
+                            });
+                    });
+            }
+        });
 }
 
 pub fn spawn_map(

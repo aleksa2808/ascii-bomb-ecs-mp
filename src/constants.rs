@@ -33,3 +33,5 @@ pub const INPUT_DOWN: u8 = 1 << 1;
 pub const INPUT_LEFT: u8 = 1 << 2;
 pub const INPUT_RIGHT: u8 = 1 << 3;
 pub const INPUT_ACTION: u8 = 1 << 4;
+
+pub const BATTLE_MODE_ROUND_DURATION_SECS: usize = 120;

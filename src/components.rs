@@ -100,3 +100,6 @@ pub struct GameTimerDisplay;
 
 #[derive(Component)]
 pub struct PenguinPortraitDisplay;
+
+#[derive(Component)]
+pub struct PenguinPortrait(pub Penguin);
