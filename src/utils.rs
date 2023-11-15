@@ -1,7 +1,5 @@
 use bevy::{
-    prelude::{
-        BuildChildren, ChildBuilder, Commands, Entity, NodeBundle, TextBundle, Transform, Vec2,
-    },
+    prelude::{BuildChildren, ChildBuilder, Commands, NodeBundle, TextBundle, Transform, Vec2},
     sprite::{Sprite, SpriteBundle},
     text::{Text, TextStyle},
     ui::{PositionType, Style, Val},
@@ -13,8 +11,8 @@ use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 
 use crate::{
     components::{
-        BombSatchel, Destructible, GameTimerDisplay, HUDRoot, Penguin, PenguinPortraitDisplay,
-        Player, Position, Solid, UIComponent, Wall,
+        Destructible, GameTimerDisplay, HUDRoot, PenguinPortraitDisplay, Position, Solid,
+        UIComponent, Wall,
     },
     constants::{COLORS, HUD_HEIGHT, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH},
     resources::{Fonts, GameTextures, HUDColors, MapSize, WorldID},
@@ -116,7 +114,8 @@ pub fn spawn_map(
     percent_of_passable_positions_to_fill: f32,
     spawn_middle_blocks: bool,
     penguin_spawn_positions: &[Position],
-) -> Vec<Vec<Entity>> {
+) {
+    // TODO make truly random
     let mut rng = StdRng::seed_from_u64(42);
 
     // place empty/passable tiles
@@ -135,69 +134,60 @@ pub fn spawn_map(
     }
 
     // spawn walls
-    let mut stone_wall_spawn_groups = vec![];
+    let mut stone_wall_positions = HashSet::new();
     for i in 0..map_size.rows {
-        let left = Position {
+        // left
+        stone_wall_positions.insert(Position {
             y: i as isize,
             x: 0,
-        };
-        let right = Position {
+        });
+        // right
+        stone_wall_positions.insert(Position {
             y: i as isize,
             x: (map_size.columns - 1) as isize,
-        };
-        stone_wall_spawn_groups.push(vec![left, right]);
+        });
     }
     for i in 1..map_size.columns - 1 {
-        let top = Position {
+        // top
+        stone_wall_positions.insert(Position {
             y: 0,
             x: i as isize,
-        };
-        let bottom = Position {
+        });
+        // bottom
+        stone_wall_positions.insert(Position {
             y: (map_size.rows - 1) as isize,
             x: i as isize,
-        };
-        stone_wall_spawn_groups.push(vec![top, bottom]);
+        });
     }
     // checkered middle
     if spawn_middle_blocks {
         for i in (2..map_size.rows).step_by(2) {
             for j in (2..map_size.columns).step_by(2) {
-                let position = Position {
+                stone_wall_positions.insert(Position {
                     y: i as isize,
                     x: j as isize,
-                };
-                stone_wall_spawn_groups.push(vec![position]);
+                });
             }
         }
     }
 
-    let mut wall_entity_reveal_groups = vec![];
-    for spawn_group in stone_wall_spawn_groups.iter() {
-        let mut reveal_group = vec![];
-        for position in spawn_group {
-            let entity = commands
-                .spawn((
-                    SpriteBundle {
-                        texture: game_textures.get_map_textures().wall.clone(),
-                        transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 10.0),
-                        sprite: Sprite {
-                            custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    },
-                    Wall,
-                    Solid,
-                    *position,
-                ))
-                .id();
-            reveal_group.push(entity);
-        }
-        wall_entity_reveal_groups.push(reveal_group);
+    for position in stone_wall_positions.iter().cloned() {
+        commands.spawn((
+            SpriteBundle {
+                texture: game_textures.get_map_textures().wall.clone(),
+                transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 10.0),
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Wall,
+            Solid,
+            position,
+        ));
     }
 
-    let stone_wall_positions: HashSet<Position> =
-        stone_wall_spawn_groups.iter().flatten().copied().collect();
     let mut destructible_wall_potential_positions: HashSet<Position> = (0..map_size.rows)
         .flat_map(|y| {
             (0..map_size.columns).map(move |x| Position {
@@ -236,8 +226,8 @@ pub fn spawn_map(
         .into_iter()
         .sorted_by_key(|p| (p.x, p.y))
         .choose_multiple(&mut rng, num_of_destructible_walls_to_place);
-    for position in &destructible_wall_positions {
-        let entity = commands
+    for position in destructible_wall_positions.iter().cloned() {
+        commands
             .spawn((
                 SpriteBundle {
                     texture: game_textures.get_map_textures().destructible_wall.clone(),
@@ -251,96 +241,8 @@ pub fn spawn_map(
                 Wall,
                 Solid,
                 Destructible,
-                *position,
-            ))
-            .add_rollback()
-            .id();
-        wall_entity_reveal_groups.push(vec![entity]);
-    }
-
-    wall_entity_reveal_groups
-}
-
-pub fn get_battle_mode_map_size_fill(player_count: usize) -> (MapSize, f32) {
-    if player_count > 4 {
-        (
-            MapSize {
-                rows: 13,
-                columns: 17,
-            },
-            70.0,
-        )
-    } else {
-        (
-            MapSize {
-                rows: 11,
-                columns: 15,
-            },
-            60.0,
-        )
-    }
-}
-
-pub fn spawn_battle_mode_players(
-    commands: &mut Commands,
-    game_textures: &GameTextures,
-    map_size: MapSize,
-    players: &[Penguin],
-) -> Vec<Position> {
-    let possible_player_spawn_positions = [
-        (1, 1),
-        (map_size.rows - 2, map_size.columns - 2),
-        (1, map_size.columns - 2),
-        (map_size.rows - 2, 1),
-        (3, 5),
-        (map_size.rows - 4, map_size.columns - 6),
-        (3, map_size.columns - 6),
-        (map_size.rows - 4, 5),
-    ];
-    let mut possible_player_spawn_positions =
-        possible_player_spawn_positions
-            .iter()
-            .map(|(y, x)| Position {
-                y: *y as isize,
-                x: *x as isize,
-            });
-
-    let mut player_spawn_positions = vec![];
-
-    let mut spawn_player = |penguin_tag: Penguin| {
-        let player_spawn_position = possible_player_spawn_positions.next().unwrap();
-        let base_texture = game_textures.get_penguin_texture(penguin_tag).clone();
-        commands
-            .spawn((
-                SpriteBundle {
-                    texture: base_texture.clone(),
-                    transform: Transform::from_xyz(
-                        get_x(player_spawn_position.x),
-                        get_y(player_spawn_position.y),
-                        50.0,
-                    ),
-                    sprite: Sprite {
-                        custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                Player,
-                penguin_tag,
-                player_spawn_position,
-                BombSatchel {
-                    bombs_available: 10,
-                    bomb_range: 2,
-                },
+                position,
             ))
             .add_rollback();
-
-        player_spawn_positions.push(player_spawn_position);
-    };
-
-    for penguin_tag in players {
-        spawn_player(*penguin_tag);
     }
-
-    player_spawn_positions
 }

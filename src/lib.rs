@@ -18,9 +18,9 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use crate::web::{web_input, web_ready_to_start_update};
 use crate::{
-    components::{Bomb, BombSatchel, Crumbling, Fire, Position},
+    components::{BombSatchel, Position},
     constants::FPS,
-    resources::{Fonts, FrameCount, GameTextures, HUDColors},
+    resources::{Fonts, FrameCount, FreezeEndFrame, GameTextures, HUDColors, RoundOutcome},
     systems::*,
     types::GGRSConfig,
 };
@@ -110,17 +110,22 @@ pub fn run() {
             .with_input_system(input_fn)
             .register_rollback_component::<Transform>()
             .register_rollback_component::<Position>()
-            .register_rollback_component::<Bomb>()
+            // .register_rollback_component::<Bomb>()
             .register_rollback_component::<BombSatchel>()
-            .register_rollback_component::<Fire>()
-            .register_rollback_component::<Crumbling>()
-            .register_rollback_resource::<FrameCount>(),
+            // .register_rollback_component::<Fire>()
+            // .register_rollback_component::<Crumbling>()
+            .register_rollback_resource::<FrameCount>()
+            .register_rollback_resource::<RoundOutcome>()
+            // .register_rollback_resource::<more?>()
+            .register_rollback_resource::<FreezeEndFrame>(),
     )
     .add_systems(
         GgrsSchedule,
         (
             increase_frame_system,
-            leaderboard_display,
+            show_leaderboard,
+            start_new_round,
+            start_new_tournament,
             apply_deferred,
             player_move,
             bomb_drop,

@@ -19,9 +19,12 @@ pub struct UIRoot;
 pub struct UIComponent;
 
 #[derive(Component)]
+pub struct LeaderboardUI;
+
+#[derive(Component)]
 pub struct Player;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Component)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Component, Reflect)]
 pub struct Penguin(pub usize);
 
 #[derive(Default, Reflect, Debug, Clone, Copy, PartialEq, Eq, Hash, Component)]

@@ -4,6 +4,7 @@ use bevy_matchbox::{
     prelude::{PeerState, SingleChannel},
     MatchboxSocket,
 };
+use rand::seq::IteratorRandom;
 
 use crate::{
     components::*,
@@ -13,9 +14,7 @@ use crate::{
     },
     resources::*,
     types::Direction,
-    utils::{
-        get_battle_mode_map_size_fill, get_x, get_y, init_hud, spawn_battle_mode_players, spawn_map,
-    },
+    utils::{get_x, get_y, init_hud, spawn_map},
     AppState, GGRSConfig,
 };
 
@@ -110,6 +109,7 @@ pub fn lobby_system(
 
     // extract final player list
     let players = socket.players();
+    let player_count = players.len();
 
     let max_prediction = 12;
 
@@ -138,6 +138,10 @@ pub fn lobby_system(
     commands.insert_resource(Session::P2P(sess));
 
     // transition to game state
+    commands.insert_resource(Leaderboard {
+        scores: (0..player_count).map(|p| (Penguin(p), 0)).collect(),
+        winning_score: 3,
+    });
     app_state.set(AppState::InGame);
 }
 
@@ -167,10 +171,26 @@ pub fn setup_battle_mode(
     let world_id = WorldID(1);
     game_textures.set_map_textures(world_id);
 
-    let (map_size, percent_of_passable_positions_to_fill) =
-        get_battle_mode_map_size_fill(matchbox_config.number_of_players);
+    let (map_size, percent_of_passable_positions_to_fill) = if matchbox_config.number_of_players > 4
+    {
+        (
+            MapSize {
+                rows: 13,
+                columns: 17,
+            },
+            70.0,
+        )
+    } else {
+        (
+            MapSize {
+                rows: 11,
+                columns: 15,
+            },
+            60.0,
+        )
+    };
 
-    // spawn HUD
+    // HUD generation //
     commands
         .spawn((
             NodeBundle {
@@ -198,15 +218,58 @@ pub fn setup_battle_mode(
             );
         });
 
-    let players: Vec<Penguin> = (0..matchbox_config.number_of_players)
-        .map(Penguin)
-        .collect();
+    // Map generation //
+    let possible_player_spawn_positions = [
+        (1, 1),
+        (map_size.rows - 2, map_size.columns - 2),
+        (1, map_size.columns - 2),
+        (map_size.rows - 2, 1),
+        (3, 5),
+        (map_size.rows - 4, map_size.columns - 6),
+        (3, map_size.columns - 6),
+        (map_size.rows - 4, 5),
+    ];
+    let mut possible_player_spawn_positions =
+        possible_player_spawn_positions
+            .iter()
+            .map(|(y, x)| Position {
+                y: *y as isize,
+                x: *x as isize,
+            });
 
-    // map generation //
-    let player_spawn_positions =
-        spawn_battle_mode_players(&mut commands, &game_textures, map_size, &players);
+    let mut player_spawn_positions = vec![];
+    for penguin_tag in (0..matchbox_config.number_of_players).map(Penguin) {
+        let player_spawn_position = possible_player_spawn_positions.next().unwrap();
+        let base_texture = game_textures.get_penguin_texture(penguin_tag).clone();
+        commands
+            .spawn((
+                SpriteBundle {
+                    texture: base_texture.clone(),
+                    transform: Transform::from_xyz(
+                        get_x(player_spawn_position.x),
+                        get_y(player_spawn_position.y),
+                        50.0,
+                    ),
+                    sprite: Sprite {
+                        custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                Player,
+                penguin_tag,
+                player_spawn_position,
+                BombSatchel {
+                    bombs_available: 10,
+                    bomb_range: 2,
+                },
+            ))
+            .add_rollback();
 
-    let _ = spawn_map(
+        player_spawn_positions.push(player_spawn_position);
+    }
+
+    spawn_map(
         &mut commands,
         &game_textures,
         map_size,
@@ -215,11 +278,13 @@ pub fn setup_battle_mode(
         &player_spawn_positions,
     );
 
+    // TODO move
     primary_query.get_single_mut().unwrap().resolution.set(
         (map_size.columns * TILE_WIDTH) as f32,
         (HUD_HEIGHT + map_size.rows * TILE_HEIGHT) as f32,
     );
 
+    // TODO move
     commands.spawn(Camera2dBundle {
         transform: Transform::from_xyz(
             ((map_size.columns * TILE_WIDTH) as f32) / 2.0,
@@ -555,32 +620,303 @@ pub fn finish_round(
 
     if round_over {
         println!("Round over, freezing...");
-        commands.insert_resource(FreezeEndFrame(frame_count.frame + 2 * FPS));
+        commands.insert_resource(FreezeEndFrame(frame_count.frame + FPS /* 1 second */));
     }
 }
 
-pub fn leaderboard_display(
+pub fn show_leaderboard(
     mut commands: Commands,
+    game_textures: Res<GameTextures>,
+    fonts: Res<Fonts>,
+    mut leaderboard: ResMut<Leaderboard>,
     round_outcome: Option<Res<RoundOutcome>>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    primary_query: Query<&Window, With<PrimaryWindow>>,
+    query: Query<Entity, With<UIRoot>>,
     frame_count: Res<FrameCount>,
-    query: Query<Entity, Without<Window>>,
 ) {
-    if let Some(round_outcome) = round_outcome.as_deref() {
-        // TODO merge the two round end resources
-        let mut freeze_end_frame = freeze_end_frame.unwrap();
+    if let (Some(mut freeze_end_frame), Some(round_outcome)) =
+        (freeze_end_frame, round_outcome.as_deref())
+    {
         if frame_count.frame >= freeze_end_frame.0 {
             match round_outcome {
-                RoundOutcome::Winner(penguin) => println!("Winner: {:?}", penguin.0),
+                RoundOutcome::Winner(penguin) => {
+                    println!("Winner: {:?}", penguin.0);
+                    *leaderboard.scores.get_mut(penguin).unwrap() += 1;
+                }
                 RoundOutcome::Tie => println!("Tie!"),
-            }
-
-            for e in query.iter() {
-                commands.entity(e).despawn();
             }
 
             commands.remove_resource::<RoundOutcome>();
             freeze_end_frame.0 = frame_count.frame + 2 * FPS;
+
+            // setup leaderboard display
+            let window = primary_query.get_single().unwrap();
+
+            commands.entity(query.single()).with_children(|parent| {
+                parent
+                    .spawn((
+                        NodeBundle {
+                            style: Style {
+                                position_type: PositionType::Absolute,
+                                left: Val::Px(0.0),
+                                top: Val::Px(0.0),
+                                width: Val::Px(window.width()),
+                                height: Val::Px(window.height()),
+                                ..Default::default()
+                            },
+                            background_color: COLORS[0].into(),
+                            ..Default::default()
+                        },
+                        UIComponent,
+                        LeaderboardUI,
+                    ))
+                    .add_rollback()
+                    .with_children(|parent| {
+                        // spawn border
+                        let mut spawn_color = |y: usize, x: usize| {
+                            parent
+                                .spawn((
+                                    NodeBundle {
+                                        style: Style {
+                                            position_type: PositionType::Absolute,
+                                            left: Val::Px((x * PIXEL_SCALE) as f32),
+                                            top: Val::Px((y * PIXEL_SCALE) as f32),
+                                            width: Val::Px(PIXEL_SCALE as f32),
+                                            height: Val::Px(PIXEL_SCALE as f32),
+                                            ..Default::default()
+                                        },
+                                        background_color: (*COLORS
+                                            .iter()
+                                            .choose(&mut rand::thread_rng())
+                                            .unwrap())
+                                        .into(),
+                                        ..Default::default()
+                                    },
+                                    UIComponent,
+                                ))
+                                .add_rollback();
+                        };
+
+                        let height = window.height() as usize / PIXEL_SCALE;
+                        let width = window.width() as usize / PIXEL_SCALE;
+                        for y in 0..height {
+                            spawn_color(y, 0);
+                            spawn_color(y, 1);
+                            spawn_color(y, width - 2);
+                            spawn_color(y, width - 1);
+                        }
+                        for x in 2..width - 2 {
+                            spawn_color(0, x);
+                            spawn_color(1, x);
+                            spawn_color(height - 2, x);
+                            spawn_color(height - 1, x);
+                        }
+
+                        for (penguin, score) in &leaderboard.scores {
+                            // spawn penguin portrait
+                            parent
+                                .spawn((
+                                    NodeBundle {
+                                        style: Style {
+                                            position_type: PositionType::Absolute,
+                                            left: Val::Px(4.0 * PIXEL_SCALE as f32),
+                                            top: Val::Px(
+                                                ((6 + penguin.0 * 12) * PIXEL_SCALE) as f32,
+                                            ),
+                                            width: Val::Px(TILE_WIDTH as f32),
+                                            height: Val::Px(TILE_HEIGHT as f32),
+                                            ..Default::default()
+                                        },
+                                        background_color: COLORS[2].into(),
+                                        ..Default::default()
+                                    },
+                                    UIComponent,
+                                ))
+                                .add_rollback()
+                                .with_children(|parent| {
+                                    parent
+                                        .spawn((
+                                            ImageBundle {
+                                                style: Style {
+                                                    width: Val::Percent(100.0),
+                                                    height: Val::Percent(100.0),
+                                                    ..Default::default()
+                                                },
+                                                image: game_textures
+                                                    .get_penguin_texture(*penguin)
+                                                    .clone()
+                                                    .into(),
+                                                ..Default::default()
+                                            },
+                                            UIComponent,
+                                        ))
+                                        .add_rollback();
+                                });
+
+                            // spawn penguin trophies
+                            for i in 0..*score {
+                                parent
+                                    .spawn((
+                                        ImageBundle {
+                                            style: Style {
+                                                position_type: PositionType::Absolute,
+                                                top: Val::Px(
+                                                    ((7 + penguin.0 * 12) * PIXEL_SCALE) as f32,
+                                                ),
+                                                left: Val::Px(((15 + i * 9) * PIXEL_SCALE) as f32),
+                                                width: Val::Px(5.0 * PIXEL_SCALE as f32),
+                                                height: Val::Px(7.0 * PIXEL_SCALE as f32),
+                                                ..Default::default()
+                                            },
+                                            image: game_textures.trophy.clone().into(),
+                                            ..Default::default()
+                                        },
+                                        UIComponent,
+                                    ))
+                                    .add_rollback();
+                            }
+
+                            if let RoundOutcome::Winner(round_winner_penguin) = round_outcome {
+                                if penguin == round_winner_penguin {
+                                    let mut place_text = |y, x, str: &str, c: usize| {
+                                        parent
+                                            .spawn((
+                                                TextBundle {
+                                                    text: Text::from_section(
+                                                        str.to_string(),
+                                                        TextStyle {
+                                                            font: fonts.mono.clone(),
+                                                            font_size: 2.0 * PIXEL_SCALE as f32,
+                                                            color: COLORS[c].into(),
+                                                        },
+                                                    ),
+                                                    style: Style {
+                                                        position_type: PositionType::Absolute,
+                                                        top: Val::Px(y as f32 * PIXEL_SCALE as f32),
+                                                        left: Val::Px(
+                                                            x as f32 * PIXEL_SCALE as f32,
+                                                        ),
+                                                        ..Default::default()
+                                                    },
+                                                    ..Default::default()
+                                                },
+                                                UIComponent,
+                                            ))
+                                            .add_rollback();
+                                    };
+
+                                    place_text(
+                                        6 + penguin.0 * 12,
+                                        15 + (score - 1) * 9 - 2,
+                                        "*",
+                                        15,
+                                    );
+                                    place_text(
+                                        8 + penguin.0 * 12,
+                                        15 + (score - 1) * 9 + 6,
+                                        "*",
+                                        15,
+                                    );
+                                    place_text(
+                                        10 + penguin.0 * 12,
+                                        15 + (score - 1) * 9 - 1,
+                                        "*",
+                                        15,
+                                    );
+                                }
+                            }
+                        }
+                    });
+            });
+        }
+    }
+}
+
+pub fn start_new_round(
+    mut commands: Commands,
+    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    round_outcome: Option<Res<RoundOutcome>>,
+    tournament_complete: Option<Res<TournamentComplete>>,
+    frame_count: Res<FrameCount>,
+    leaderboard: Res<Leaderboard>,
+    query: Query<Entity, Without<Window>>,
+    matchbox_config: Res<MatchboxConfig>,
+    game_textures: ResMut<GameTextures>,
+    fonts: Res<Fonts>,
+    hud_colors: Res<HUDColors>,
+    primary_query: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    if let (Some(mut freeze_end_frame), None, None) =
+        (freeze_end_frame, round_outcome, tournament_complete)
+    {
+        if frame_count.frame >= freeze_end_frame.0 {
+            if let Some((p, _)) = leaderboard
+                .scores
+                .iter()
+                .find(|(_, u)| **u >= leaderboard.winning_score)
+            {
+                println!("Penguin {} WINNER WINNER CHICKEN DINNER", p.0);
+                freeze_end_frame.0 = frame_count.frame + 5 * FPS;
+                commands.insert_resource(TournamentComplete);
+
+                // TODO show winner
+            } else {
+                commands.remove_resource::<FreezeEndFrame>();
+
+                for e in query.iter() {
+                    // TODO should everything be rollbackable now?
+                    commands.entity(e).despawn();
+                }
+
+                setup_battle_mode(
+                    commands,
+                    game_textures,
+                    fonts,
+                    hud_colors,
+                    primary_query,
+                    matchbox_config,
+                )
+            }
+        }
+    }
+}
+
+pub fn start_new_tournament(
+    mut commands: Commands,
+    query: Query<Entity, Without<Window>>,
+    freeze_end_frame: Option<Res<FreezeEndFrame>>,
+    tournament_complete: Option<Res<TournamentComplete>>,
+    frame_count: Res<FrameCount>,
+    mut leaderboard: ResMut<Leaderboard>,
+    game_textures: ResMut<GameTextures>,
+    fonts: Res<Fonts>,
+    hud_colors: Res<HUDColors>,
+    primary_query: Query<&mut Window, With<PrimaryWindow>>,
+    matchbox_config: Res<MatchboxConfig>,
+) {
+    if let (Some(freeze_end_frame), Some(_)) = (freeze_end_frame, tournament_complete) {
+        if frame_count.frame >= freeze_end_frame.0 {
+            commands.remove_resource::<FreezeEndFrame>();
+            commands.remove_resource::<TournamentComplete>();
+
+            for (_, score) in &mut leaderboard.scores {
+                *score = 0;
+            }
+
+            for e in query.iter() {
+                // TODO should everything be rollbackable now?
+                commands.entity(e).despawn();
+            }
+
+            setup_battle_mode(
+                commands,
+                game_textures,
+                fonts,
+                hud_colors,
+                primary_query,
+                matchbox_config,
+            )
         }
     }
 }

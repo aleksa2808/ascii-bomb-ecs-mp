@@ -1,4 +1,4 @@
-use bevy::{ecs as bevy_ecs, prelude::*, reflect as bevy_reflect, text::Font};
+use bevy::{ecs as bevy_ecs, prelude::*, reflect as bevy_reflect, text::Font, utils::HashMap};
 
 use crate::{components::Penguin, constants::COLORS};
 
@@ -81,6 +81,7 @@ pub struct GameTextures {
     pub range_up: Handle<Image>,
     pub bomb_push: Handle<Image>,
     pub burning_item: Handle<Image>,
+    pub trophy: Handle<Image>,
 }
 
 impl GameTextures {
@@ -122,6 +123,7 @@ impl FromWorld for GameTextures {
         let range_up_texture = asset_server.load("sprites/range_up.png");
         let bomb_push_texture = asset_server.load("sprites/bomb_push.png");
         let burning_item_texture = asset_server.load("sprites/burning_item.png");
+        let trophy_texture = asset_server.load("sprites/trophy.png");
 
         let game_textures = GameTextures {
             penguin_variants: penguin_variants.to_vec(),
@@ -141,6 +143,7 @@ impl FromWorld for GameTextures {
             range_up: range_up_texture.clone(),
             bomb_push: bomb_push_texture.clone(),
             burning_item: burning_item_texture.clone(),
+            trophy: trophy_texture.clone(),
         };
 
         game_textures
@@ -154,10 +157,20 @@ pub struct FrameCount {
 }
 
 #[derive(Resource)]
-pub enum RoundOutcome {
-    Winner(Penguin),
-    Tie,
+pub struct Leaderboard {
+    pub scores: HashMap<Penguin, usize>,
+    pub winning_score: usize,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Reflect, Default)]
+pub enum RoundOutcome {
+    #[default]
+    Tie,
+    Winner(Penguin),
+}
+
+#[derive(Resource, Reflect, Default)]
 pub struct FreezeEndFrame(pub usize);
+
+#[derive(Resource)]
+pub struct TournamentComplete;
