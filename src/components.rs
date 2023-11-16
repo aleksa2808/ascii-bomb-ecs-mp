@@ -1,8 +1,5 @@
 use bevy::{
-    ecs as bevy_ecs,
-    prelude::{Component, Entity},
-    reflect as bevy_reflect,
-    reflect::Reflect,
+    ecs as bevy_ecs, prelude::Component, reflect as bevy_reflect, reflect::Reflect,
     render::color::Color,
 };
 
@@ -77,8 +74,7 @@ impl Position {
 
 #[derive(Default, Clone, Reflect, Component, Hash)]
 pub struct Bomb {
-    // TODO replace with Penguin
-    pub owner: Option<Entity>,
+    pub owner: Option<Penguin>,
     pub range: usize,
     pub expiration_frame: usize,
 }

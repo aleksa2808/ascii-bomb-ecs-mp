@@ -268,7 +268,7 @@ pub fn setup_battle_mode(
                 penguin_tag,
                 player_spawn_position,
                 BombSatchel {
-                    bombs_available: 10,
+                    bombs_available: 1,
                     bomb_range: 2,
                 },
             ))
@@ -393,7 +393,7 @@ pub fn bomb_drop(
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     world_id: Res<WorldID>,
-    mut query: Query<(Entity, &Penguin, &Position, &mut BombSatchel), With<Player>>,
+    mut query: Query<(&Penguin, &Position, &mut BombSatchel), With<Player>>,
     query2: Query<&Position, With<Solid>>,
     frame_count: Res<FrameCount>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
@@ -403,7 +403,7 @@ pub fn bomb_drop(
         return;
     }
 
-    for (entity, penguin, position, mut bomb_satchel) in query.iter_mut() {
+    for (penguin, position, mut bomb_satchel) in query.iter_mut() {
         if inputs[penguin.0].0.inp & INPUT_ACTION != 0
             && bomb_satchel.bombs_available > 0
             && !query2.iter().any(|p| *p == *position)
@@ -423,7 +423,7 @@ pub fn bomb_drop(
                         ..Default::default()
                     },
                     Bomb {
-                        owner: Some(entity),
+                        owner: Some(*penguin),
                         range: bomb_satchel.bomb_range,
                         expiration_frame: frame_count.frame + 2 * FPS,
                     },
@@ -613,7 +613,7 @@ pub fn explode_bombs(
         Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
         Query<(&mut Bomb, &Position)>,
     )>,
-    mut query3: Query<&mut BombSatchel>,
+    mut query3: Query<(&Penguin, &mut BombSatchel)>,
     mut query: Query<
         (Entity, &Position, &mut Handle<Image>, Option<&Crumbling>),
         (With<Wall>, With<Destructible>),
@@ -650,7 +650,11 @@ pub fn explode_bombs(
         commands.entity(entity).despawn_recursive();
 
         if let Some(owner) = bomb.owner {
-            if let Ok(mut bomb_satchel) = query3.get_mut(owner) {
+            if let Some(mut bomb_satchel) = query3
+                .iter_mut()
+                .find(|(p, _)| **p == owner)
+                .map(|(_, s)| s)
+            {
                 bomb_satchel.bombs_available += 1;
             }
         }
