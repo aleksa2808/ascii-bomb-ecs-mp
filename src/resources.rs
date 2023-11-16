@@ -24,15 +24,6 @@ impl FromWorld for Fonts {
     }
 }
 
-#[derive(Clone, Copy, Resource)]
-pub struct MapSize {
-    pub rows: usize,
-    pub columns: usize,
-}
-
-#[derive(Clone, Copy, Resource)]
-pub struct WorldID(pub usize);
-
 #[derive(Resource)]
 pub struct HUDColors {
     background_colors: Vec<Color>,
@@ -150,30 +141,39 @@ impl FromWorld for GameTextures {
     }
 }
 
+#[derive(Clone, Copy, Resource)]
+pub struct MapSize {
+    pub rows: usize,
+    pub columns: usize,
+}
+
+#[derive(Resource, Default, Clone, Copy)]
+pub struct WorldID(pub usize);
+
 #[derive(Resource, Default, Reflect, Hash)]
 #[reflect(Hash)]
 pub struct FrameCount {
     pub frame: usize,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Reflect, Default)]
 pub struct Leaderboard {
     pub scores: HashMap<Penguin, usize>,
     pub winning_score: usize,
 }
 
-#[derive(Resource, Reflect, Default)]
+#[derive(Resource, Reflect, Default, Hash)]
 pub enum RoundOutcome {
     #[default]
     Tie,
     Winner(Penguin),
 }
 
-#[derive(Resource)]
-pub struct GameEndFrame(pub usize);
+// #[derive(Resource)]
+// pub struct GameEndFrame(pub usize);
 
-#[derive(Resource, Reflect, Default)]
+#[derive(Resource, Reflect, Default, Hash)]
 pub struct FreezeEndFrame(pub usize);
 
-#[derive(Resource)]
+#[derive(Resource, Reflect, Default)]
 pub struct TournamentComplete;

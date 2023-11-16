@@ -9,12 +9,12 @@ use rand::seq::IteratorRandom;
 use crate::{
     components::*,
     constants::{
-        BATTLE_MODE_ROUND_DURATION_SECS, COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN,
-        INPUT_LEFT, INPUT_RIGHT, INPUT_UP, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
+        COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP,
+        PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
     },
     resources::*,
     types::Direction,
-    utils::{format_hud_time, get_x, get_y, init_hud, spawn_map},
+    utils::{get_x, get_y, init_hud, spawn_map},
     AppState, GGRSConfig,
 };
 
@@ -167,7 +167,7 @@ pub fn setup_battle_mode(
     hud_colors: Res<HUDColors>,
     mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
     matchbox_config: Res<MatchboxConfig>,
-    frame_count: Res<FrameCount>,
+    _frame_count: Res<FrameCount>,
 ) {
     let world_id = WorldID(1);
     game_textures.set_map_textures(world_id);
@@ -195,9 +195,9 @@ pub fn setup_battle_mode(
         .map(Penguin)
         .collect::<Vec<Penguin>>();
 
-    commands.insert_resource(GameEndFrame(
-        frame_count.frame + BATTLE_MODE_ROUND_DURATION_SECS * FPS,
-    ));
+    // commands.insert_resource(GameEndFrame(
+    //     frame_count.frame + BATTLE_MODE_ROUND_DURATION_SECS * FPS,
+    // ));
 
     // HUD generation //
     commands
@@ -305,25 +305,25 @@ pub fn setup_battle_mode(
     commands.insert_resource(world_id);
 }
 
-pub fn update_hud_clock(
-    game_end_frame: Res<GameEndFrame>,
-    mut query: Query<&mut Text, With<GameTimerDisplay>>,
-    frame_count: Res<FrameCount>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
-) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
-        return;
-    }
+// pub fn update_hud_clock(
+//     game_end_frame: Res<GameEndFrame>,
+//     mut query: Query<&mut Text, With<GameTimerDisplay>>,
+//     frame_count: Res<FrameCount>,
+//     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+// ) {
+//     if freeze_end_frame.is_some() {
+//         // The current round is over.
+//         return;
+//     }
 
-    let remaining_seconds = (game_end_frame.0 - frame_count.frame) / FPS;
-    query.single_mut().sections[0].value = format_hud_time(remaining_seconds);
-}
+//     let remaining_seconds = (game_end_frame.0 - frame_count.frame) / FPS;
+//     query.single_mut().sections[0].value = format_hud_time(remaining_seconds);
+// }
 
 pub fn player_move(
     inputs: Res<PlayerInputs<GGRSConfig>>,
     mut p: ParamSet<(
-        Query<(&mut Transform, &Penguin, &mut Position, &mut Sprite)>,
+        Query<(&mut Transform, &Penguin, &mut Position, &mut Sprite), With<Player>>,
         Query<&Position, With<Solid>>,
     )>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
@@ -377,7 +377,7 @@ pub fn bomb_drop(
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     world_id: Res<WorldID>,
-    mut query: Query<(Entity, &Penguin, &Position, &mut BombSatchel)>,
+    mut query: Query<(Entity, &Penguin, &Position, &mut BombSatchel), With<Player>>,
     query2: Query<&Position, With<Solid>>,
     frame_count: Res<FrameCount>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
@@ -704,8 +704,9 @@ pub fn player_burn(
     mut commands: Commands,
     query: Query<(Entity, &Position, &Penguin), With<Player>>,
     query2: Query<&Position, With<Fire>>,
-    query3: Query<(Entity, &PenguinPortrait)>,
+    _query3: Query<(Entity, &PenguinPortrait)>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    frame_count: Res<FrameCount>,
 ) {
     if freeze_end_frame.is_some() {
         // The current round is over.
@@ -716,13 +717,17 @@ pub fn player_burn(
 
     for (e, p, penguin) in query.iter() {
         if fire_positions.contains(p) {
-            commands.entity(e).despawn();
+            println!("Player death: {}, position: {p:?}", penguin.0);
+            commands.entity(e).remove::<Player>();
+            commands.entity(e).insert(Dead {
+                cleanup_frame: frame_count.frame + FPS / 2,
+            });
 
             // remove penguin portrait
             // TODO this might cause blinking issues if rolled back
-            commands
-                .entity(query3.iter().find(|(_, pp)| pp.0 == *penguin).unwrap().0)
-                .despawn_recursive();
+            // commands
+            //     .entity(query3.iter().find(|(_, pp)| pp.0 == *penguin).unwrap().0)
+            //     .despawn_recursive();
         }
     }
 }
@@ -731,7 +736,7 @@ pub fn finish_round(
     mut commands: Commands,
     query: Query<&Penguin, With<Player>>,
     frame_count: Res<FrameCount>,
-    game_end_frame: Res<GameEndFrame>,
+    // game_end_frame: Res<GameEndFrame>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
 ) {
     if freeze_end_frame.is_some() {
@@ -740,7 +745,9 @@ pub fn finish_round(
     }
 
     let mut round_over = false;
-    if frame_count.frame >= game_end_frame.0 || query.iter().count() == 0 {
+    if
+    /* frame_count.frame >= game_end_frame.0 || */
+    query.iter().count() == 0 {
         commands.insert_resource(RoundOutcome::Tie);
 
         round_over = true;
@@ -753,6 +760,24 @@ pub fn finish_round(
     if round_over {
         println!("Round over, freezing...");
         commands.insert_resource(FreezeEndFrame(frame_count.frame + FPS /* 1 second */));
+    }
+}
+
+pub fn cleanup_dead(
+    mut commands: Commands,
+    query: Query<(Entity, &Dead)>,
+    frame_count: Res<FrameCount>,
+    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+) {
+    if freeze_end_frame.is_some() {
+        // The current round is over.
+        return;
+    }
+
+    for (e, d) in query.iter() {
+        if frame_count.frame >= d.cleanup_frame {
+            commands.entity(e).despawn_recursive();
+        }
     }
 }
 

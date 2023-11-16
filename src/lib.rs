@@ -17,13 +17,7 @@ use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 use crate::web::{web_input, web_ready_to_start_update};
-use crate::{
-    components::{BombSatchel, Position},
-    constants::FPS,
-    resources::{Fonts, FrameCount, FreezeEndFrame, GameTextures, HUDColors, RoundOutcome},
-    systems::*,
-    types::GGRSConfig,
-};
+use crate::{components::*, constants::FPS, resources::*, systems::*, types::GGRSConfig};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::{
     native::{native_input, Args},
@@ -108,16 +102,43 @@ pub fn run() {
         GgrsPlugin::<GGRSConfig>::new()
             .with_update_frequency(FPS)
             .with_input_system(input_fn)
+            // Bevy components
+            .register_rollback_component::<Sprite>()
             .register_rollback_component::<Transform>()
+            .register_rollback_component::<GlobalTransform>()
+            .register_rollback_component::<Handle<Image>>()
+            .register_rollback_component::<Visibility>()
+            .register_rollback_component::<ComputedVisibility>()
+            // HUD components
+            // TODO not sure if these are necessary
+            .register_rollback_component::<UIRoot>()
+            .register_rollback_component::<UIComponent>()
+            .register_rollback_component::<HUDRoot>()
+            .register_rollback_component::<GameTimerDisplay>()
+            .register_rollback_component::<PenguinPortraitDisplay>()
+            .register_rollback_component::<PenguinPortrait>()
+            .register_rollback_component::<LeaderboardUI>()
+            // game components
+            .register_rollback_component::<Player>()
+            .register_rollback_component::<Dead>()
+            .register_rollback_component::<Penguin>()
             .register_rollback_component::<Position>()
-            // .register_rollback_component::<Bomb>()
+            .register_rollback_component::<Bomb>()
+            .register_rollback_component::<Fuse>()
+            .register_rollback_component::<Fire>()
+            .register_rollback_component::<Solid>()
+            .register_rollback_component::<Wall>()
+            .register_rollback_component::<Destructible>()
+            .register_rollback_component::<Crumbling>()
             .register_rollback_component::<BombSatchel>()
-            // .register_rollback_component::<Fire>()
-            // .register_rollback_component::<Crumbling>()
+            // resources
             .register_rollback_resource::<FrameCount>()
+            // TODO not sure if this is necessary
+            // .register_rollback_resource::<Leaderboard>()
             .register_rollback_resource::<RoundOutcome>()
-            // .register_rollback_resource::<more?>()
-            .register_rollback_resource::<FreezeEndFrame>(),
+            .register_rollback_resource::<FreezeEndFrame>()
+            // TODO not sure if this is necessary
+            .register_rollback_resource::<TournamentComplete>(),
     )
     .add_systems(
         GgrsSchedule,
@@ -126,7 +147,7 @@ pub fn run() {
             show_leaderboard,
             start_new_round,
             start_new_tournament,
-            update_hud_clock,
+            // update_hud_clock,
             apply_deferred,
             player_move,
             bomb_drop,
@@ -141,6 +162,8 @@ pub fn run() {
             player_burn,
             apply_deferred,
             finish_round,
+            apply_deferred,
+            cleanup_dead,
         )
             .chain(),
     )
