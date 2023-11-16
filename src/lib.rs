@@ -136,34 +136,42 @@ pub fn run() {
             // TODO not sure if this is necessary
             // .register_rollback_resource::<Leaderboard>()
             .register_rollback_resource::<RoundOutcome>()
+            .register_rollback_resource::<GameEndFrame>()
             .register_rollback_resource::<FreezeEndFrame>()
             // TODO not sure if this is necessary
             .register_rollback_resource::<TournamentComplete>(),
     )
     .add_systems(
         GgrsSchedule,
+        // list too long for one chain
         (
-            increase_frame_system,
-            show_leaderboard,
-            start_new_round,
-            start_new_tournament,
-            // update_hud_clock,
-            apply_deferred,
-            player_move,
-            bomb_drop,
-            apply_deferred,
-            fire_tick,
-            apply_deferred,
-            crumbling_tick,
-            apply_deferred,
-            explode_bombs,
-            apply_deferred,
-            animate_fuse,
-            player_burn,
-            apply_deferred,
-            finish_round,
-            apply_deferred,
-            cleanup_dead,
+            (
+                increase_frame_system,
+                show_leaderboard,
+                start_new_round,
+                start_new_tournament,
+                update_hud_clock,
+                apply_deferred,
+                player_move,
+                bomb_drop,
+                apply_deferred,
+            )
+                .chain(),
+            (
+                fire_tick,
+                apply_deferred,
+                crumbling_tick,
+                apply_deferred,
+                explode_bombs,
+                apply_deferred,
+                animate_fuse,
+                player_burn,
+                apply_deferred,
+                finish_round,
+                apply_deferred,
+                cleanup_dead,
+            )
+                .chain(),
         )
             .chain(),
     )

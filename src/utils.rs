@@ -131,7 +131,6 @@ pub fn init_hud(
                         PenguinPortrait(*penguin),
                         UIComponent,
                     ))
-                    .add_rollback()
                     .with_children(|parent| {
                         parent
                             .spawn((
@@ -146,25 +145,22 @@ pub fn init_hud(
                                 },
                                 UIComponent,
                             ))
-                            .add_rollback()
                             .with_children(|parent| {
-                                parent
-                                    .spawn((
-                                        ImageBundle {
-                                            style: Style {
-                                                width: Val::Percent(100.0),
-                                                height: Val::Percent(100.0),
-                                                ..Default::default()
-                                            },
-                                            image: game_textures
-                                                .get_penguin_texture(*penguin)
-                                                .clone()
-                                                .into(),
+                                parent.spawn((
+                                    ImageBundle {
+                                        style: Style {
+                                            width: Val::Percent(100.0),
+                                            height: Val::Percent(100.0),
                                             ..Default::default()
                                         },
-                                        UIComponent,
-                                    ))
-                                    .add_rollback();
+                                        image: game_textures
+                                            .get_penguin_texture(*penguin)
+                                            .clone()
+                                            .into(),
+                                        ..Default::default()
+                                    },
+                                    UIComponent,
+                                ));
                             });
                     });
             }

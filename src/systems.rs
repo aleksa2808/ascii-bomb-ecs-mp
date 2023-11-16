@@ -9,12 +9,12 @@ use rand::seq::IteratorRandom;
 use crate::{
     components::*,
     constants::{
-        COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP,
-        PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
+        BATTLE_MODE_ROUND_DURATION_SECS, COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN,
+        INPUT_LEFT, INPUT_RIGHT, INPUT_UP, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
     },
     resources::*,
     types::Direction,
-    utils::{get_x, get_y, init_hud, spawn_map},
+    utils::{format_hud_time, get_x, get_y, init_hud, spawn_map},
     AppState, GGRSConfig,
 };
 
@@ -167,7 +167,7 @@ pub fn setup_battle_mode(
     hud_colors: Res<HUDColors>,
     mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
     matchbox_config: Res<MatchboxConfig>,
-    _frame_count: Res<FrameCount>,
+    frame_count: Res<FrameCount>,
 ) {
     let world_id = WorldID(1);
     game_textures.set_map_textures(world_id);
@@ -195,9 +195,9 @@ pub fn setup_battle_mode(
         .map(Penguin)
         .collect::<Vec<Penguin>>();
 
-    // commands.insert_resource(GameEndFrame(
-    //     frame_count.frame + BATTLE_MODE_ROUND_DURATION_SECS * FPS,
-    // ));
+    commands.insert_resource(GameEndFrame(
+        frame_count.frame + BATTLE_MODE_ROUND_DURATION_SECS * FPS,
+    ));
 
     // HUD generation //
     commands
@@ -305,20 +305,21 @@ pub fn setup_battle_mode(
     commands.insert_resource(world_id);
 }
 
-// pub fn update_hud_clock(
-//     game_end_frame: Res<GameEndFrame>,
-//     mut query: Query<&mut Text, With<GameTimerDisplay>>,
-//     frame_count: Res<FrameCount>,
-//     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
-// ) {
-//     if freeze_end_frame.is_some() {
-//         // The current round is over.
-//         return;
-//     }
+pub fn update_hud_clock(
+    game_end_frame: Res<GameEndFrame>,
+    mut query: Query<&mut Text, With<GameTimerDisplay>>,
+    frame_count: Res<FrameCount>,
+    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+) {
+    if freeze_end_frame.is_some() {
+        // The current round is over.
+        return;
+    }
 
-//     let remaining_seconds = (game_end_frame.0 - frame_count.frame) / FPS;
-//     query.single_mut().sections[0].value = format_hud_time(remaining_seconds);
-// }
+    let remaining_seconds =
+        ((game_end_frame.0 - frame_count.frame) as f32 / FPS as f32).ceil() as usize;
+    query.single_mut().sections[0].value = format_hud_time(remaining_seconds);
+}
 
 pub fn player_move(
     inputs: Res<PlayerInputs<GGRSConfig>>,
@@ -387,7 +388,6 @@ pub fn bomb_drop(
         return;
     }
 
-    // TODO this might need to be sorted as the query order is non deterministic which might break rollback IDs
     for (entity, penguin, position, mut bomb_satchel) in query.iter_mut() {
         if inputs[penguin.0].0.inp & INPUT_ACTION != 0
             && bomb_satchel.bombs_available > 0
@@ -724,7 +724,7 @@ pub fn player_burn(
             });
 
             // remove penguin portrait
-            // TODO this might cause blinking issues if rolled back
+            // TODO don't despawn/rollback this, but keep it synced to players
             // commands
             //     .entity(query3.iter().find(|(_, pp)| pp.0 == *penguin).unwrap().0)
             //     .despawn_recursive();
@@ -736,7 +736,7 @@ pub fn finish_round(
     mut commands: Commands,
     query: Query<&Penguin, With<Player>>,
     frame_count: Res<FrameCount>,
-    // game_end_frame: Res<GameEndFrame>,
+    game_end_frame: Res<GameEndFrame>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
 ) {
     if freeze_end_frame.is_some() {
@@ -745,9 +745,7 @@ pub fn finish_round(
     }
 
     let mut round_over = false;
-    if
-    /* frame_count.frame >= game_end_frame.0 || */
-    query.iter().count() == 0 {
+    if frame_count.frame >= game_end_frame.0 || query.iter().count() == 0 {
         commands.insert_resource(RoundOutcome::Tie);
 
         round_over = true;
@@ -828,31 +826,28 @@ pub fn show_leaderboard(
                         UIComponent,
                         LeaderboardUI,
                     ))
-                    .add_rollback()
                     .with_children(|parent| {
                         // spawn border
                         let mut spawn_color = |y: usize, x: usize| {
-                            parent
-                                .spawn((
-                                    NodeBundle {
-                                        style: Style {
-                                            position_type: PositionType::Absolute,
-                                            left: Val::Px((x * PIXEL_SCALE) as f32),
-                                            top: Val::Px((y * PIXEL_SCALE) as f32),
-                                            width: Val::Px(PIXEL_SCALE as f32),
-                                            height: Val::Px(PIXEL_SCALE as f32),
-                                            ..Default::default()
-                                        },
-                                        background_color: (*COLORS
-                                            .iter()
-                                            .choose(&mut rand::thread_rng())
-                                            .unwrap())
-                                        .into(),
+                            parent.spawn((
+                                NodeBundle {
+                                    style: Style {
+                                        position_type: PositionType::Absolute,
+                                        left: Val::Px((x * PIXEL_SCALE) as f32),
+                                        top: Val::Px((y * PIXEL_SCALE) as f32),
+                                        width: Val::Px(PIXEL_SCALE as f32),
+                                        height: Val::Px(PIXEL_SCALE as f32),
                                         ..Default::default()
                                     },
-                                    UIComponent,
-                                ))
-                                .add_rollback();
+                                    background_color: (*COLORS
+                                        .iter()
+                                        .choose(&mut rand::thread_rng())
+                                        .unwrap())
+                                    .into(),
+                                    ..Default::default()
+                                },
+                                UIComponent,
+                            ));
                         };
 
                         let height = window.height() as usize / PIXEL_SCALE;
@@ -890,77 +885,68 @@ pub fn show_leaderboard(
                                     },
                                     UIComponent,
                                 ))
-                                .add_rollback()
                                 .with_children(|parent| {
-                                    parent
-                                        .spawn((
-                                            ImageBundle {
-                                                style: Style {
-                                                    width: Val::Percent(100.0),
-                                                    height: Val::Percent(100.0),
-                                                    ..Default::default()
-                                                },
-                                                image: game_textures
-                                                    .get_penguin_texture(*penguin)
-                                                    .clone()
-                                                    .into(),
+                                    parent.spawn((
+                                        ImageBundle {
+                                            style: Style {
+                                                width: Val::Percent(100.0),
+                                                height: Val::Percent(100.0),
                                                 ..Default::default()
                                             },
-                                            UIComponent,
-                                        ))
-                                        .add_rollback();
+                                            image: game_textures
+                                                .get_penguin_texture(*penguin)
+                                                .clone()
+                                                .into(),
+                                            ..Default::default()
+                                        },
+                                        UIComponent,
+                                    ));
                                 });
 
                             // spawn penguin trophies
                             for i in 0..*score {
-                                parent
-                                    .spawn((
-                                        ImageBundle {
-                                            style: Style {
-                                                position_type: PositionType::Absolute,
-                                                top: Val::Px(
-                                                    ((7 + penguin.0 * 12) * PIXEL_SCALE) as f32,
-                                                ),
-                                                left: Val::Px(((15 + i * 9) * PIXEL_SCALE) as f32),
-                                                width: Val::Px(5.0 * PIXEL_SCALE as f32),
-                                                height: Val::Px(7.0 * PIXEL_SCALE as f32),
-                                                ..Default::default()
-                                            },
-                                            image: game_textures.trophy.clone().into(),
+                                parent.spawn((
+                                    ImageBundle {
+                                        style: Style {
+                                            position_type: PositionType::Absolute,
+                                            top: Val::Px(
+                                                ((7 + penguin.0 * 12) * PIXEL_SCALE) as f32,
+                                            ),
+                                            left: Val::Px(((15 + i * 9) * PIXEL_SCALE) as f32),
+                                            width: Val::Px(5.0 * PIXEL_SCALE as f32),
+                                            height: Val::Px(7.0 * PIXEL_SCALE as f32),
                                             ..Default::default()
                                         },
-                                        UIComponent,
-                                    ))
-                                    .add_rollback();
+                                        image: game_textures.trophy.clone().into(),
+                                        ..Default::default()
+                                    },
+                                    UIComponent,
+                                ));
                             }
 
                             if let RoundOutcome::Winner(round_winner_penguin) = round_outcome {
                                 if penguin == round_winner_penguin {
                                     let mut place_text = |y, x, str: &str, c: usize| {
-                                        parent
-                                            .spawn((
-                                                TextBundle {
-                                                    text: Text::from_section(
-                                                        str.to_string(),
-                                                        TextStyle {
-                                                            font: fonts.mono.clone(),
-                                                            font_size: 2.0 * PIXEL_SCALE as f32,
-                                                            color: COLORS[c].into(),
-                                                        },
-                                                    ),
-                                                    style: Style {
-                                                        position_type: PositionType::Absolute,
-                                                        top: Val::Px(y as f32 * PIXEL_SCALE as f32),
-                                                        left: Val::Px(
-                                                            x as f32 * PIXEL_SCALE as f32,
-                                                        ),
-                                                        ..Default::default()
+                                        parent.spawn((
+                                            TextBundle {
+                                                text: Text::from_section(
+                                                    str.to_string(),
+                                                    TextStyle {
+                                                        font: fonts.mono.clone(),
+                                                        font_size: 2.0 * PIXEL_SCALE as f32,
+                                                        color: COLORS[c].into(),
                                                     },
+                                                ),
+                                                style: Style {
+                                                    position_type: PositionType::Absolute,
+                                                    top: Val::Px(y as f32 * PIXEL_SCALE as f32),
+                                                    left: Val::Px(x as f32 * PIXEL_SCALE as f32),
                                                     ..Default::default()
                                                 },
-                                                UIComponent,
-                                            ))
-                                            .add_rollback();
+                                                ..Default::default()
+                                            },
+                                            UIComponent,
+                                        ));
                                     };
 
                                     place_text(
