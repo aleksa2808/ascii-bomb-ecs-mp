@@ -321,6 +321,21 @@ pub fn update_hud_clock(
     query.single_mut().sections[0].value = format_hud_time(remaining_seconds);
 }
 
+pub fn update_player_portraits(
+    query: Query<&Penguin>,
+    mut query2: Query<(&mut Visibility, &PenguinPortrait)>,
+) {
+    let players: HashSet<Penguin> = query.iter().copied().collect();
+
+    for (mut visibility, portrait) in query2.iter_mut() {
+        if players.contains(&portrait.0) {
+            *visibility = Visibility::Visible;
+        } else {
+            *visibility = Visibility::Hidden;
+        }
+    }
+}
+
 pub fn player_move(
     inputs: Res<PlayerInputs<GGRSConfig>>,
     mut p: ParamSet<(
@@ -704,7 +719,6 @@ pub fn player_burn(
     mut commands: Commands,
     query: Query<(Entity, &Position, &Penguin), With<Player>>,
     query2: Query<&Position, With<Fire>>,
-    _query3: Query<(Entity, &PenguinPortrait)>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
     frame_count: Res<FrameCount>,
 ) {
@@ -722,12 +736,6 @@ pub fn player_burn(
             commands.entity(e).insert(Dead {
                 cleanup_frame: frame_count.frame + FPS / 2,
             });
-
-            // remove penguin portrait
-            // TODO don't despawn/rollback this, but keep it synced to players
-            // commands
-            //     .entity(query3.iter().find(|(_, pp)| pp.0 == *penguin).unwrap().0)
-            //     .despawn_recursive();
         }
     }
 }

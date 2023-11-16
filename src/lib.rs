@@ -151,6 +151,7 @@ pub fn run() {
                 start_new_round,
                 start_new_tournament,
                 update_hud_clock,
+                update_player_portraits,
                 apply_deferred,
                 player_move,
                 bomb_drop,
