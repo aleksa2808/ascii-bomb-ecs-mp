@@ -10,11 +10,11 @@ use crate::{
     components::*,
     constants::{
         BATTLE_MODE_ROUND_DURATION_SECS, COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN,
-        INPUT_LEFT, INPUT_RIGHT, INPUT_UP, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
+        INPUT_LEFT, INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
     },
     resources::*,
     types::Direction,
-    utils::{format_hud_time, get_x, get_y, init_hud, spawn_map},
+    utils::{format_hud_time, generate_item_at_position, get_x, get_y, init_hud, spawn_map},
     AppState, GGRSConfig,
 };
 
@@ -394,7 +394,7 @@ pub fn bomb_drop(
     fonts: Res<Fonts>,
     world_id: Res<WorldID>,
     mut query: Query<(&Penguin, &Position, &mut BombSatchel), With<Player>>,
-    query2: Query<&Position, With<Solid>>,
+    query2: Query<&Position, Or<(With<Solid>, With<BurningItem>)>>,
     frame_count: Res<FrameCount>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
 ) {
@@ -590,7 +590,8 @@ pub fn fire_tick(
 pub fn crumbling_tick(
     mut commands: Commands,
     frame_count: Res<FrameCount>,
-    query: Query<(Entity, &Crumbling)>,
+    query: Query<(Entity, &Crumbling, &Position)>,
+    game_textures: Res<GameTextures>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
 ) {
     if freeze_end_frame.is_some() {
@@ -598,8 +599,33 @@ pub fn crumbling_tick(
         return;
     }
 
-    for (entity, crumbling) in query.iter() {
+    for (entity, crumbling, position) in query.iter() {
         if frame_count.frame >= crumbling.expiration_frame {
+            commands.entity(entity).despawn_recursive();
+
+            // drop power-up
+            // let r = rand::thread_rng().gen_range(0.0..1.0);
+            let r = 1;
+            if r < ITEM_SPAWN_CHANCE {
+                generate_item_at_position(*position, &mut commands, &game_textures);
+            }
+        }
+    }
+}
+
+pub fn burning_item_tick(
+    mut commands: Commands,
+    frame_count: Res<FrameCount>,
+    query: Query<(Entity, &BurningItem)>,
+    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+) {
+    if freeze_end_frame.is_some() {
+        // The current round is over.
+        return;
+    }
+
+    for (entity, burning_item) in query.iter() {
+        if frame_count.frame >= burning_item.expiration_frame {
             commands.entity(entity).despawn_recursive();
         }
     }
@@ -685,8 +711,6 @@ pub fn explode_bombs(
                 let position = position.offset(direction, i);
 
                 if fireproof_positions.contains(&position) {
-                    // ev_burn.send(BurnEvent { position });
-
                     // bomb burn
                     p.p2()
                         .iter_mut()
@@ -723,8 +747,8 @@ pub fn player_burn(
     mut commands: Commands,
     query: Query<(Entity, &Position, &Penguin), With<Player>>,
     query2: Query<&Position, With<Fire>>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
     frame_count: Res<FrameCount>,
+    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
 ) {
     if freeze_end_frame.is_some() {
         // The current round is over.
@@ -740,6 +764,43 @@ pub fn player_burn(
             commands.entity(e).insert(Dead {
                 cleanup_frame: frame_count.frame + FPS / 2,
             });
+        }
+    }
+}
+
+pub fn item_burn(
+    mut commands: Commands,
+    game_textures: Res<GameTextures>,
+    query: Query<(Entity, &Position), With<Item>>,
+    query2: Query<&Position, With<Fire>>,
+    frame_count: Res<FrameCount>,
+    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+) {
+    if freeze_end_frame.is_some() {
+        // The current round is over.
+        return;
+    }
+
+    let fire_positions: HashSet<Position> = query2.iter().copied().collect();
+
+    for (entity, position) in query.iter() {
+        if fire_positions.contains(position) {
+            commands.entity(entity).despawn_recursive();
+            commands.spawn((
+                SpriteBundle {
+                    texture: game_textures.burning_item.clone(),
+                    transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 20.0),
+                    sprite: Sprite {
+                        custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                *position,
+                BurningItem {
+                    expiration_frame: frame_count.frame + FPS / 2,
+                },
+            ));
         }
     }
 }

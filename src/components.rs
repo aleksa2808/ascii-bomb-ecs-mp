@@ -110,3 +110,16 @@ pub struct BombSatchel {
     pub bombs_available: usize,
     pub bomb_range: usize,
 }
+
+#[derive(Component, Reflect, Default, Hash)]
+pub enum Item {
+    #[default]
+    BombsUp,
+    RangeUp,
+    BombPush,
+}
+
+#[derive(Component, Reflect, Default, Hash)]
+pub struct BurningItem {
+    pub expiration_frame: usize,
+}

@@ -11,8 +11,8 @@ use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 
 use crate::{
     components::{
-        Destructible, GameTimerDisplay, HUDRoot, Penguin, PenguinPortrait, PenguinPortraitDisplay,
-        Position, Solid, UIComponent, Wall,
+        Destructible, GameTimerDisplay, HUDRoot, Item, Penguin, PenguinPortrait,
+        PenguinPortraitDisplay, Position, Solid, UIComponent, Wall,
     },
     constants::{
         BATTLE_MODE_ROUND_DURATION_SECS, COLORS, HUD_HEIGHT, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
@@ -305,4 +305,42 @@ pub fn spawn_map(
             ))
             .add_rollback();
     }
+}
+
+pub fn generate_item_at_position(
+    position: Position,
+    commands: &mut Commands,
+    game_textures: &GameTextures,
+) {
+    // TODO
+    // let r = rand::thread_rng().gen::<usize>() % 100;
+    let r = 42;
+
+    /* "Loot tables" */
+    let item = match r {
+        _ if r < 50 => Item::BombsUp,
+        50..=89 => Item::RangeUp,
+        _ if r >= 90 => Item::BombPush,
+        _ => unreachable!(),
+    };
+
+    commands
+        .spawn((
+            SpriteBundle {
+                texture: match item {
+                    Item::BombsUp => game_textures.bombs_up.clone(),
+                    Item::RangeUp => game_textures.range_up.clone(),
+                    Item::BombPush => game_textures.bomb_push.clone(),
+                },
+                transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 20.0),
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            position,
+            item,
+        ))
+        .add_rollback();
 }

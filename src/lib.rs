@@ -131,6 +131,8 @@ pub fn run() {
             .register_rollback_component::<Destructible>()
             .register_rollback_component::<Crumbling>()
             .register_rollback_component::<BombSatchel>()
+            .register_rollback_component::<Item>()
+            .register_rollback_component::<BurningItem>()
             // resources
             .register_rollback_resource::<FrameCount>()
             // TODO not sure if this is necessary
@@ -144,6 +146,7 @@ pub fn run() {
     .add_systems(
         GgrsSchedule,
         // list too long for one chain
+        // TODO prune apply_deferred calls
         (
             (
                 increase_frame_system,
@@ -163,10 +166,14 @@ pub fn run() {
                 apply_deferred,
                 crumbling_tick,
                 apply_deferred,
+                burning_item_tick,
+                apply_deferred,
                 explode_bombs,
                 apply_deferred,
                 animate_fuse,
                 player_burn,
+                apply_deferred,
+                item_burn,
                 apply_deferred,
                 finish_round,
                 apply_deferred,

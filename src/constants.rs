@@ -35,3 +35,6 @@ pub const INPUT_RIGHT: u8 = 1 << 3;
 pub const INPUT_ACTION: u8 = 1 << 4;
 
 pub const BATTLE_MODE_ROUND_DURATION_SECS: usize = 120;
+
+// TODO float precision
+pub const ITEM_SPAWN_CHANCE: usize = 10;
