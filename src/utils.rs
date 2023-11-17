@@ -7,7 +7,7 @@ use bevy::{
 };
 use bevy_ggrs::AddRollbackCommandExtension;
 use itertools::Itertools;
-use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
+use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
 use crate::{
     components::{
@@ -168,6 +168,7 @@ pub fn init_hud(
 }
 
 pub fn spawn_map(
+    rng: &mut StdRng,
     commands: &mut Commands,
     game_textures: &GameTextures,
     map_size: MapSize,
@@ -175,9 +176,6 @@ pub fn spawn_map(
     spawn_middle_blocks: bool,
     penguin_spawn_positions: &[Position],
 ) {
-    // TODO make truly random
-    let mut rng = StdRng::seed_from_u64(42);
-
     // place empty/passable tiles
     for j in 0..map_size.rows {
         for i in 0..map_size.columns {
@@ -285,7 +283,7 @@ pub fn spawn_map(
     let destructible_wall_positions = destructible_wall_potential_positions
         .into_iter()
         .sorted_by_key(|p| (p.x, p.y))
-        .choose_multiple(&mut rng, num_of_destructible_walls_to_place);
+        .choose_multiple(rng, num_of_destructible_walls_to_place);
     for position in destructible_wall_positions.iter().cloned() {
         commands
             .spawn((
@@ -308,13 +306,12 @@ pub fn spawn_map(
 }
 
 pub fn generate_item_at_position(
+    rng: &mut StdRng,
     position: Position,
     commands: &mut Commands,
     game_textures: &GameTextures,
 ) {
-    // TODO
-    // let r = rand::thread_rng().gen::<usize>() % 100;
-    let r = 42;
+    let r = rng.gen::<usize>() % 100;
 
     /* "Loot tables" */
     let item = match r {

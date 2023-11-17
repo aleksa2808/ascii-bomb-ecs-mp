@@ -36,5 +36,6 @@ pub const INPUT_ACTION: u8 = 1 << 4;
 
 pub const BATTLE_MODE_ROUND_DURATION_SECS: usize = 120;
 
-// TODO float precision
-pub const ITEM_SPAWN_CHANCE: usize = 10;
+// TODO does float precision cause desyncs?
+// TODO was 10%, adjust
+pub const ITEM_SPAWN_CHANCE_PERCENTAGE: usize = 33;

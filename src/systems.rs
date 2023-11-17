@@ -4,13 +4,14 @@ use bevy_matchbox::{
     prelude::{PeerState, SingleChannel},
     MatchboxSocket,
 };
-use rand::seq::IteratorRandom;
+use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 
 use crate::{
     components::*,
     constants::{
         BATTLE_MODE_ROUND_DURATION_SECS, COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN,
-        INPUT_LEFT, INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
+        INPUT_LEFT, INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE_PERCENTAGE, PIXEL_SCALE, TILE_HEIGHT,
+        TILE_WIDTH,
     },
     resources::*,
     types::Direction,
@@ -107,6 +108,9 @@ pub fn lobby_system(
 
     info!("All peers have joined, going in-game");
 
+    // TODO combine rng seed from players
+    commands.insert_resource(SessionRng(StdRng::seed_from_u64(42)));
+
     // extract final player list
     let players = socket.players();
     let player_count = players.len();
@@ -159,6 +163,7 @@ pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
 
 pub fn setup_battle_mode(
     mut commands: Commands,
+    mut session_rng: ResMut<SessionRng>,
     mut game_textures: ResMut<GameTextures>,
     fonts: Res<Fonts>,
     hud_colors: Res<HUDColors>,
@@ -275,6 +280,7 @@ pub fn setup_battle_mode(
     }
 
     spawn_map(
+        &mut session_rng.0,
         &mut commands,
         &game_textures,
         map_size,
@@ -643,6 +649,7 @@ pub fn fire_tick(
 
 pub fn crumbling_tick(
     mut commands: Commands,
+    mut session_rng: ResMut<SessionRng>,
     frame_count: Res<FrameCount>,
     query: Query<(Entity, &Crumbling, &Position)>,
     game_textures: Res<GameTextures>,
@@ -658,10 +665,14 @@ pub fn crumbling_tick(
             commands.entity(entity).despawn_recursive();
 
             // drop power-up
-            // let r = rand::thread_rng().gen_range(0.0..1.0);
-            let r = 1;
-            if r < ITEM_SPAWN_CHANCE {
-                generate_item_at_position(*position, &mut commands, &game_textures);
+            let r = session_rng.0.gen_range(0..100);
+            if r < ITEM_SPAWN_CHANCE_PERCENTAGE {
+                generate_item_at_position(
+                    &mut session_rng.0,
+                    *position,
+                    &mut commands,
+                    &game_textures,
+                );
             }
         }
     }
@@ -1105,6 +1116,7 @@ pub fn show_leaderboard(
 
 pub fn start_new_round(
     mut commands: Commands,
+    session_rng: ResMut<SessionRng>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
     round_outcome: Option<Res<RoundOutcome>>,
     tournament_complete: Option<Res<TournamentComplete>>,
@@ -1141,6 +1153,7 @@ pub fn start_new_round(
 
                 setup_battle_mode(
                     commands,
+                    session_rng,
                     game_textures,
                     fonts,
                     hud_colors,
@@ -1155,6 +1168,7 @@ pub fn start_new_round(
 
 pub fn start_new_tournament(
     mut commands: Commands,
+    session_rng: ResMut<SessionRng>,
     query: Query<Entity, Without<Window>>,
     freeze_end_frame: Option<Res<FreezeEndFrame>>,
     tournament_complete: Option<Res<TournamentComplete>>,
@@ -1182,6 +1196,7 @@ pub fn start_new_tournament(
 
             setup_battle_mode(
                 commands,
+                session_rng,
                 game_textures,
                 fonts,
                 hud_colors,

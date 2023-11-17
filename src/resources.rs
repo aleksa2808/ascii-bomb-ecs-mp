@@ -1,4 +1,5 @@
 use bevy::{ecs as bevy_ecs, prelude::*, text::Font, utils::HashMap};
+use rand::rngs::StdRng;
 
 use crate::{components::Penguin, constants::COLORS};
 
@@ -148,6 +149,9 @@ pub struct MapSize {
 
 #[derive(Resource, Clone, Copy)]
 pub struct WorldID(pub usize);
+
+#[derive(Resource)]
+pub struct SessionRng(pub StdRng);
 
 #[derive(Resource, Clone, Copy)]
 pub struct FrameCount {
