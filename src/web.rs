@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
-use bevy::prelude::*;
-use bevy_ggrs::ggrs::PlayerHandle;
+use bevy::{prelude::*, utils::HashMap};
+use bevy_ggrs::{LocalInputs, LocalPlayers};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -9,7 +9,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use crate::{
     constants::{INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP},
     resources::MatchboxConfig,
-    types::PlayerInput,
+    types::{GgrsConfig, PlayerInput},
     AppState,
 };
 
@@ -65,72 +65,83 @@ pub enum InputAction {
 }
 
 pub fn web_input(
-    _handle: In<PlayerHandle>,
-    mut r: Local<u8>,
+    mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
-) -> PlayerInput {
-    let mut web_input: u8 = 0;
+    local_players: Res<LocalPlayers>,
+    mut r: Local<Vec<u8>>,
+) {
+    if r.len() != local_players.0.len() {
+        *r = vec![0; local_players.0.len()];
+    }
 
-    let mut inputs = INPUTS.write();
-    while let Some(input) = inputs.pop_back() {
-        if let Some(input_action) = match input {
-            0 => Some(InputAction::Up),
-            1 => Some(InputAction::Down),
-            2 => Some(InputAction::Left),
-            3 => Some(InputAction::Right),
-            4 => Some(InputAction::Space),
-            5 => Some(InputAction::W),
-            6 => Some(InputAction::S),
-            7 => Some(InputAction::A),
-            8 => Some(InputAction::D),
-            9 => Some(InputAction::G),
-            10 => Some(InputAction::Return),
-            11 => Some(InputAction::Escape),
-            12 => Some(InputAction::Back),
-            13 => Some(InputAction::F),
-            _ => None,
-        } {
-            match input_action {
-                InputAction::Up => {
-                    web_input |= INPUT_UP;
+    let mut local_inputs = HashMap::new();
+
+    for (i, handle) in local_players.0.iter().enumerate() {
+        let mut web_input: u8 = 0;
+
+        let mut inputs = INPUTS.write();
+        while let Some(input) = inputs.pop_back() {
+            if let Some(input_action) = match input {
+                0 => Some(InputAction::Up),
+                1 => Some(InputAction::Down),
+                2 => Some(InputAction::Left),
+                3 => Some(InputAction::Right),
+                4 => Some(InputAction::Space),
+                5 => Some(InputAction::W),
+                6 => Some(InputAction::S),
+                7 => Some(InputAction::A),
+                8 => Some(InputAction::D),
+                9 => Some(InputAction::G),
+                10 => Some(InputAction::Return),
+                11 => Some(InputAction::Escape),
+                12 => Some(InputAction::Back),
+                13 => Some(InputAction::F),
+                _ => None,
+            } {
+                match input_action {
+                    InputAction::Up => {
+                        web_input |= INPUT_UP;
+                    }
+                    InputAction::Down => {
+                        web_input |= INPUT_DOWN;
+                    }
+                    InputAction::Left => {
+                        web_input |= INPUT_LEFT;
+                    }
+                    InputAction::Right => {
+                        web_input |= INPUT_RIGHT;
+                    }
+                    InputAction::Space => {
+                        web_input |= INPUT_ACTION;
+                    }
+                    _ => (),
                 }
-                InputAction::Down => {
-                    web_input |= INPUT_DOWN;
-                }
-                InputAction::Left => {
-                    web_input |= INPUT_LEFT;
-                }
-                InputAction::Right => {
-                    web_input |= INPUT_RIGHT;
-                }
-                InputAction::Space => {
-                    web_input |= INPUT_ACTION;
-                }
-                _ => (),
             }
         }
+
+        let mut kb_input: u8 = 0;
+
+        if keyboard_input.pressed(KeyCode::Up) {
+            kb_input |= INPUT_UP;
+        }
+        if keyboard_input.pressed(KeyCode::Left) {
+            kb_input |= INPUT_LEFT;
+        }
+        if keyboard_input.pressed(KeyCode::Down) {
+            kb_input |= INPUT_DOWN;
+        }
+        if keyboard_input.pressed(KeyCode::Right) {
+            kb_input |= INPUT_RIGHT;
+        }
+        if keyboard_input.pressed(KeyCode::Space) {
+            kb_input |= INPUT_ACTION;
+        }
+
+        let inp = !r[i] & kb_input | web_input;
+        r[i] = kb_input;
+
+        local_inputs.insert(*handle, PlayerInput { inp });
     }
 
-    let mut kb_input: u8 = 0;
-
-    if keyboard_input.pressed(KeyCode::Up) {
-        kb_input |= INPUT_UP;
-    }
-    if keyboard_input.pressed(KeyCode::Left) {
-        kb_input |= INPUT_LEFT;
-    }
-    if keyboard_input.pressed(KeyCode::Down) {
-        kb_input |= INPUT_DOWN;
-    }
-    if keyboard_input.pressed(KeyCode::Right) {
-        kb_input |= INPUT_RIGHT;
-    }
-    if keyboard_input.pressed(KeyCode::Space) {
-        kb_input |= INPUT_ACTION;
-    }
-
-    let inp = !*r & kb_input | web_input;
-    *r = kb_input;
-
-    PlayerInput { inp }
+    commands.insert_resource(LocalInputs::<GgrsConfig>(local_inputs));
 }
