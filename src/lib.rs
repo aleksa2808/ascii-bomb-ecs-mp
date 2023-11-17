@@ -157,6 +157,8 @@ pub fn run() {
                     update_player_portraits,
                     apply_deferred,
                     player_move,
+                    pick_up_item,
+                    apply_deferred,
                     bomb_drop,
                     apply_deferred,
                 )

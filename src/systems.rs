@@ -384,6 +384,63 @@ pub fn player_move(
     }
 }
 
+pub fn pick_up_item(
+    mut commands: Commands,
+    game_textures: Res<GameTextures>,
+    mut query: Query<(Entity, &Position, &mut BombSatchel), With<Player>>,
+    query2: Query<(Entity, &Item, &Position)>,
+    frame_count: Res<FrameCount>,
+    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+) {
+    if freeze_end_frame.is_some() {
+        // The current round is over.
+        return;
+    }
+
+    for (ie, i, ip) in query2.iter() {
+        let mut it = query
+            .iter_mut()
+            .filter_map(|(e, pp, bs)| if *pp == *ip { Some((e, bs)) } else { None });
+        match (it.next(), it.next()) {
+            (None, None) => {
+                // There are no players at this position
+            }
+            (Some((_pe, mut bomb_satchel)), None) => {
+                println!("powered up: {:?}", ip);
+                match i {
+                    Item::BombsUp => bomb_satchel.bombs_available += 1,
+                    Item::RangeUp => bomb_satchel.bomb_range += 1,
+                    Item::BombPush => {
+                        // commands.entity(pe).insert(BombPush);
+                    }
+                };
+
+                commands.entity(ie).despawn_recursive();
+            }
+            (Some(_), Some(_)) => {
+                println!("Multiple players arrived at item position ({:?}) at the same time! In the ensuing chaos the item was destroyed...", ip);
+                commands.entity(ie).despawn_recursive();
+                commands.spawn((
+                    SpriteBundle {
+                        texture: game_textures.burning_item.clone(),
+                        transform: Transform::from_xyz(get_x(ip.x), get_y(ip.y), 20.0),
+                        sprite: Sprite {
+                            custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    *ip,
+                    BurningItem {
+                        expiration_frame: frame_count.frame + FPS / 2,
+                    },
+                ));
+            }
+            (None, Some(_)) => unreachable!(),
+        }
+    }
+}
+
 pub fn bomb_drop(
     mut commands: Commands,
     inputs: Res<PlayerInputs<GgrsConfig>>,
