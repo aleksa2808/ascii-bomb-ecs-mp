@@ -73,11 +73,11 @@ pub fn run() {
     .add_state::<AppState>()
     .add_systems(
         OnEnter(AppState::Lobby),
-        (lobby_startup, start_matchbox_socket),
+        (setup_lobby, start_matchbox_socket),
     )
     .add_systems(Update, lobby_system.run_if(in_state(AppState::Lobby)))
-    .add_systems(OnExit(AppState::Lobby), lobby_cleanup)
-    .add_systems(OnEnter(AppState::InGame), setup_battle_mode)
+    .add_systems(OnExit(AppState::Lobby), teardown_lobby)
+    .add_systems(OnEnter(AppState::InGame), setup_game)
     .add_systems(Update, log_ggrs_events.run_if(in_state(AppState::InGame)));
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -18,8 +18,8 @@ use crate::{
     rename_all_env = "screaming-snake"
 )]
 pub struct Args {
-    // #[clap(long, default_value = "wss://match-0-6.helsing.studio")]
-    #[clap(long, default_value = "ws://127.0.0.1:3536")]
+    #[clap(long, default_value = "wss://match-0-6.helsing.studio")]
+    // #[clap(long, default_value = "ws://127.0.0.1:3536")]
     pub signal_server_address: String,
 
     #[clap(long)]

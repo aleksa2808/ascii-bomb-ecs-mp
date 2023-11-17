@@ -42,10 +42,5 @@ pub enum Direction {
 }
 
 impl Direction {
-    pub const LIST: [Direction; 4] = [
-        Direction::Right,
-        Direction::Left,
-        Direction::Up,
-        Direction::Down,
-    ];
+    pub const LIST: [Self; 4] = [Self::Right, Self::Left, Self::Up, Self::Down];
 }

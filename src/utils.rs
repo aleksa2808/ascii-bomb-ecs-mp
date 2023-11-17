@@ -1,5 +1,6 @@
 use bevy::{
     prelude::{BuildChildren, ChildBuilder, Commands, NodeBundle, TextBundle, Transform, Vec2},
+    render::color::Color,
     sprite::{Sprite, SpriteBundle},
     text::{Text, TextStyle},
     ui::{node_bundles::ImageBundle, PositionType, Style, UiRect, Val},
@@ -11,13 +12,14 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
 use crate::{
     components::{
-        Destructible, GameTimerDisplay, HUDRoot, Item, Penguin, PenguinPortrait,
-        PenguinPortraitDisplay, Position, Solid, UIComponent, Wall,
+        BombSatchel, Destructible, GameTimerDisplay, HUDRoot, Item, Penguin, PenguinPortrait,
+        PenguinPortraitDisplay, Player, Position, Solid, UIComponent, UIRoot, Wall,
     },
     constants::{
-        BATTLE_MODE_ROUND_DURATION_SECS, COLORS, HUD_HEIGHT, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
+        BATTLE_MODE_ROUND_DURATION_SECS, COLORS, FPS, HUD_HEIGHT, PIXEL_SCALE, TILE_HEIGHT,
+        TILE_WIDTH,
     },
-    resources::{Fonts, GameTextures, HUDColors, MapSize, WorldID},
+    resources::{Fonts, GameEndFrame, GameTextures, HUDColors, MapSize, WorldType},
     types::Direction,
 };
 
@@ -37,12 +39,12 @@ pub fn format_hud_time(remaining_seconds: usize) -> String {
     )
 }
 
-pub fn init_hud(
+fn init_hud(
     parent: &mut ChildBuilder,
     hud_colors: &HUDColors,
     fonts: &Fonts,
     width: f32,
-    world_id: WorldID,
+    world_type: WorldType,
     game_textures: &GameTextures,
     penguin_tags: &[Penguin],
 ) {
@@ -57,7 +59,7 @@ pub fn init_hud(
                     height: Val::Px(HUD_HEIGHT as f32),
                     ..Default::default()
                 },
-                background_color: hud_colors.get_background_color(world_id).into(),
+                background_color: hud_colors.get_background_color(world_type).into(),
                 ..Default::default()
             },
             UIComponent,
@@ -86,7 +88,7 @@ pub fn init_hud(
                     parent.spawn((
                         TextBundle {
                             text: Text::from_section(
-                                format_hud_time(BATTLE_MODE_ROUND_DURATION_SECS),
+                                "",
                                 TextStyle {
                                     font: fonts.mono.clone(),
                                     font_size: 2.0 * PIXEL_SCALE as f32,
@@ -167,20 +169,19 @@ pub fn init_hud(
         });
 }
 
-pub fn spawn_map(
+fn spawn_map(
     rng: &mut StdRng,
     commands: &mut Commands,
     game_textures: &GameTextures,
+    world_type: WorldType,
     map_size: MapSize,
-    percent_of_passable_positions_to_fill: f32,
-    spawn_middle_blocks: bool,
-    penguin_spawn_positions: &[Position],
+    player_spawn_positions: &[Position],
 ) {
     // place empty/passable tiles
     for j in 0..map_size.rows {
         for i in 0..map_size.columns {
             commands.spawn(SpriteBundle {
-                texture: game_textures.get_map_textures().empty.clone(),
+                texture: game_textures.get_map_textures(world_type).empty.clone(),
                 transform: Transform::from_xyz(get_x(i as isize), get_y(j as isize), 0.0),
                 sprite: Sprite {
                     custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
@@ -218,21 +219,19 @@ pub fn spawn_map(
         });
     }
     // checkered middle
-    if spawn_middle_blocks {
-        for i in (2..map_size.rows).step_by(2) {
-            for j in (2..map_size.columns).step_by(2) {
-                stone_wall_positions.insert(Position {
-                    y: i as isize,
-                    x: j as isize,
-                });
-            }
+    for i in (2..map_size.rows).step_by(2) {
+        for j in (2..map_size.columns).step_by(2) {
+            stone_wall_positions.insert(Position {
+                y: i as isize,
+                x: j as isize,
+            });
         }
     }
 
     for position in stone_wall_positions.iter().cloned() {
         commands.spawn((
             SpriteBundle {
-                texture: game_textures.get_map_textures().wall.clone(),
+                texture: game_textures.get_map_textures(world_type).wall.clone(),
                 transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 10.0),
                 sprite: Sprite {
                     custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
@@ -258,17 +257,20 @@ pub fn spawn_map(
 
     let number_of_passable_positions = destructible_wall_potential_positions.len();
 
-    // reserve room for the penguins (cross-shaped)
-    for penguin_spawn_position in penguin_spawn_positions {
-        destructible_wall_potential_positions.remove(penguin_spawn_position);
+    // reserve room for the players (cross-shaped)
+    for player_spawn_position in player_spawn_positions {
+        destructible_wall_potential_positions.remove(player_spawn_position);
         for position in Direction::LIST
             .iter()
-            .map(|direction| penguin_spawn_position.offset(*direction, 1))
+            .map(|direction| player_spawn_position.offset(*direction, 1))
         {
             destructible_wall_potential_positions.remove(&position);
         }
     }
 
+    let number_of_players = player_spawn_positions.len();
+    // TODO remove f32 and this panic
+    let percent_of_passable_positions_to_fill = if number_of_players > 4 { 70.0 } else { 60.0 };
     let num_of_destructible_walls_to_place = (number_of_passable_positions as f32
         * percent_of_passable_positions_to_fill
         / 100.0) as usize;
@@ -288,7 +290,10 @@ pub fn spawn_map(
         commands
             .spawn((
                 SpriteBundle {
-                    texture: game_textures.get_map_textures().destructible_wall.clone(),
+                    texture: game_textures
+                        .get_map_textures(world_type)
+                        .destructible_wall
+                        .clone(),
                     transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 10.0),
                     sprite: Sprite {
                         custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
@@ -303,6 +308,113 @@ pub fn spawn_map(
             ))
             .add_rollback();
     }
+}
+
+pub fn setup_round(
+    rng: &mut StdRng,
+    mut commands: Commands,
+    map_size: MapSize,
+    world_type: WorldType,
+    game_textures: &GameTextures,
+    fonts: &Fonts,
+    hud_colors: &HUDColors,
+    number_of_players: usize,
+    current_frame: usize,
+) {
+    let penguin_tags = (0..number_of_players)
+        .map(Penguin)
+        .collect::<Vec<Penguin>>();
+
+    // HUD generation //
+    commands
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    ..Default::default()
+                },
+                background_color: Color::NONE.into(),
+                ..Default::default()
+            },
+            UIRoot,
+            UIComponent,
+        ))
+        .with_children(|parent| {
+            init_hud(
+                parent,
+                &hud_colors,
+                &fonts,
+                (map_size.columns * TILE_WIDTH) as f32,
+                world_type,
+                &game_textures,
+                &penguin_tags,
+            );
+        });
+
+    // Map generation //
+    let possible_player_spawn_positions = [
+        (1, 1),
+        (map_size.rows - 2, map_size.columns - 2),
+        (1, map_size.columns - 2),
+        (map_size.rows - 2, 1),
+        (3, 5),
+        (map_size.rows - 4, map_size.columns - 6),
+        (3, map_size.columns - 6),
+        (map_size.rows - 4, 5),
+    ];
+    let mut possible_player_spawn_positions =
+        possible_player_spawn_positions
+            .iter()
+            .map(|(y, x)| Position {
+                y: *y as isize,
+                x: *x as isize,
+            });
+
+    let mut player_spawn_positions = vec![];
+    for penguin_tag in penguin_tags {
+        let player_spawn_position = possible_player_spawn_positions.next().unwrap();
+        let base_texture = game_textures.get_penguin_texture(penguin_tag).clone();
+        commands
+            .spawn((
+                SpriteBundle {
+                    texture: base_texture.clone(),
+                    transform: Transform::from_xyz(
+                        get_x(player_spawn_position.x),
+                        get_y(player_spawn_position.y),
+                        50.0,
+                    ),
+                    sprite: Sprite {
+                        custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                Player,
+                penguin_tag,
+                player_spawn_position,
+                BombSatchel {
+                    bombs_available: 1,
+                    bomb_range: 2,
+                },
+            ))
+            .add_rollback();
+
+        player_spawn_positions.push(player_spawn_position);
+    }
+
+    spawn_map(
+        rng,
+        &mut commands,
+        &game_textures,
+        world_type,
+        map_size,
+        &player_spawn_positions,
+    );
+
+    commands.insert_resource(GameEndFrame(
+        current_frame + BATTLE_MODE_ROUND_DURATION_SECS * FPS,
+    ));
 }
 
 pub fn generate_item_at_position(

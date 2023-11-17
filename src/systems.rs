@@ -9,13 +9,12 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 use crate::{
     components::*,
     constants::{
-        BATTLE_MODE_ROUND_DURATION_SECS, COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN,
-        INPUT_LEFT, INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE_PERCENTAGE, PIXEL_SCALE, TILE_HEIGHT,
-        TILE_WIDTH,
+        COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP,
+        ITEM_SPAWN_CHANCE_PERCENTAGE, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
     },
     resources::*,
     types::Direction,
-    utils::{format_hud_time, generate_item_at_position, get_x, get_y, init_hud, spawn_map},
+    utils::{format_hud_time, generate_item_at_position, get_x, get_y, setup_round},
     AppState, GgrsConfig,
 };
 
@@ -34,7 +33,7 @@ pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<Matchb
     commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
 }
 
-pub fn lobby_startup(mut commands: Commands, fonts: Res<Fonts>) {
+pub fn setup_lobby(mut commands: Commands, fonts: Res<Fonts>) {
     commands.spawn(Camera2dBundle::default());
 
     // All this is just for spawning centered text.
@@ -74,7 +73,7 @@ pub fn lobby_startup(mut commands: Commands, fonts: Res<Fonts>) {
         .insert(LobbyUI);
 }
 
-pub fn lobby_cleanup(
+pub fn teardown_lobby(
     query: Query<Entity, Or<(With<LobbyUI>, With<Camera2d>)>>,
     mut commands: Commands,
 ) {
@@ -153,149 +152,40 @@ pub fn log_ggrs_events(mut session: ResMut<Session<GgrsConfig>>) {
                 info!("GgrsEvent: {event:?}");
             }
         }
-        _ => panic!("This example focuses on p2p."),
+        _ => unreachable!(),
     }
 }
 
-pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
-    frame_count.frame += 1;
-}
-
-pub fn setup_battle_mode(
+pub fn setup_game(
     mut commands: Commands,
     mut session_rng: ResMut<SessionRng>,
-    mut game_textures: ResMut<GameTextures>,
+    game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     hud_colors: Res<HUDColors>,
     mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
     matchbox_config: Res<MatchboxConfig>,
     frame_count: Res<FrameCount>,
 ) {
-    let world_id = WorldID(1);
-    game_textures.set_map_textures(world_id);
-
-    let (map_size, percent_of_passable_positions_to_fill) = if matchbox_config.number_of_players > 4
-    {
-        (
-            MapSize {
-                rows: 13,
-                columns: 17,
-            },
-            70.0,
-        )
+    let map_size = if matchbox_config.number_of_players > 4 {
+        MapSize {
+            rows: 13,
+            columns: 17,
+        }
     } else {
-        (
-            MapSize {
-                rows: 11,
-                columns: 15,
-            },
-            60.0,
-        )
+        MapSize {
+            rows: 11,
+            columns: 15,
+        }
     };
+    commands.insert_resource(map_size);
 
-    let penguin_tags = (0..matchbox_config.number_of_players)
-        .map(Penguin)
-        .collect::<Vec<Penguin>>();
-
-    commands.insert_resource(GameEndFrame(
-        frame_count.frame + BATTLE_MODE_ROUND_DURATION_SECS * FPS,
-    ));
-
-    // HUD generation //
-    commands
-        .spawn((
-            NodeBundle {
-                style: Style {
-                    width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
-                    ..Default::default()
-                },
-                background_color: Color::NONE.into(),
-                ..Default::default()
-            },
-            UIRoot,
-            UIComponent,
-        ))
-        .with_children(|parent| {
-            init_hud(
-                parent,
-                &hud_colors,
-                &fonts,
-                (map_size.columns * TILE_WIDTH) as f32,
-                world_id,
-                &game_textures,
-                &penguin_tags,
-            );
-        });
-
-    // Map generation //
-    let possible_player_spawn_positions = [
-        (1, 1),
-        (map_size.rows - 2, map_size.columns - 2),
-        (1, map_size.columns - 2),
-        (map_size.rows - 2, 1),
-        (3, 5),
-        (map_size.rows - 4, map_size.columns - 6),
-        (3, map_size.columns - 6),
-        (map_size.rows - 4, 5),
-    ];
-    let mut possible_player_spawn_positions =
-        possible_player_spawn_positions
-            .iter()
-            .map(|(y, x)| Position {
-                y: *y as isize,
-                x: *x as isize,
-            });
-
-    let mut player_spawn_positions = vec![];
-    for penguin_tag in penguin_tags {
-        let player_spawn_position = possible_player_spawn_positions.next().unwrap();
-        let base_texture = game_textures.get_penguin_texture(penguin_tag).clone();
-        commands
-            .spawn((
-                SpriteBundle {
-                    texture: base_texture.clone(),
-                    transform: Transform::from_xyz(
-                        get_x(player_spawn_position.x),
-                        get_y(player_spawn_position.y),
-                        50.0,
-                    ),
-                    sprite: Sprite {
-                        custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                Player,
-                penguin_tag,
-                player_spawn_position,
-                BombSatchel {
-                    bombs_available: 1,
-                    bomb_range: 2,
-                },
-            ))
-            .add_rollback();
-
-        player_spawn_positions.push(player_spawn_position);
-    }
-
-    spawn_map(
-        &mut session_rng.0,
-        &mut commands,
-        &game_textures,
-        map_size,
-        percent_of_passable_positions_to_fill,
-        true,
-        &player_spawn_positions,
-    );
-
-    // TODO move
+    // resize window based on map size
     primary_query.get_single_mut().unwrap().resolution.set(
         (map_size.columns * TILE_WIDTH) as f32,
         (HUD_HEIGHT + map_size.rows * TILE_HEIGHT) as f32,
     );
 
-    // TODO move
+    // spawn the main game camera
     commands.spawn(Camera2dBundle {
         transform: Transform::from_xyz(
             ((map_size.columns * TILE_WIDTH) as f32) / 2.0,
@@ -305,7 +195,25 @@ pub fn setup_battle_mode(
         ..default()
     });
 
-    commands.insert_resource(world_id);
+    // choose the initial world
+    let world_type = WorldType::random(&mut session_rng.0);
+    commands.insert_resource(world_type);
+
+    setup_round(
+        &mut session_rng.0,
+        commands,
+        map_size,
+        world_type,
+        &game_textures,
+        &fonts,
+        &hud_colors,
+        matchbox_config.number_of_players,
+        frame_count.frame,
+    );
+}
+
+pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
+    frame_count.frame += 1;
 }
 
 pub fn update_hud_clock(
@@ -452,7 +360,7 @@ pub fn bomb_drop(
     inputs: Res<PlayerInputs<GgrsConfig>>,
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
-    world_id: Res<WorldID>,
+    world_type: Res<WorldType>,
     mut query: Query<(&Penguin, &Position, &mut BombSatchel), With<Player>>,
     query2: Query<&Position, Or<(With<Solid>, With<BurningItem>)>>,
     frame_count: Res<FrameCount>,
@@ -492,7 +400,11 @@ pub fn bomb_drop(
                 ))
                 .add_rollback()
                 .with_children(|parent| {
-                    let fuse_color = COLORS[if world_id.0 == 2 { 12 } else { 14 }].into();
+                    let fuse_color = COLORS[match *world_type {
+                        WorldType::GrassWorld | WorldType::CloudWorld => 14,
+                        WorldType::IceWorld => 12,
+                    }]
+                    .into();
 
                     let mut text = Text::from_section(
                         '*',
@@ -698,6 +610,7 @@ pub fn burning_item_tick(
 
 pub fn explode_bombs(
     mut commands: Commands,
+    world_type: Res<WorldType>,
     game_textures: Res<GameTextures>,
     mut p: ParamSet<(
         Query<(Entity, &Bomb, &Position)>,
@@ -795,7 +708,10 @@ pub fn explode_bombs(
                             commands.entity(e).insert(Crumbling {
                                 expiration_frame: frame_count.frame + FPS / 2,
                             });
-                            *t = game_textures.get_map_textures().burning_wall.clone();
+                            *t = game_textures
+                                .get_map_textures(*world_type)
+                                .burning_wall
+                                .clone();
                         }
                     }
 
@@ -1116,18 +1032,19 @@ pub fn show_leaderboard(
 
 pub fn start_new_round(
     mut commands: Commands,
-    session_rng: ResMut<SessionRng>,
+    mut session_rng: ResMut<SessionRng>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
     round_outcome: Option<Res<RoundOutcome>>,
     tournament_complete: Option<Res<TournamentComplete>>,
     frame_count: Res<FrameCount>,
     leaderboard: Res<Leaderboard>,
-    query: Query<Entity, Without<Window>>,
+    query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
+    map_size: Res<MapSize>,
+    world_type: Res<WorldType>,
     matchbox_config: Res<MatchboxConfig>,
     game_textures: ResMut<GameTextures>,
     fonts: Res<Fonts>,
     hud_colors: Res<HUDColors>,
-    primary_query: Query<&mut Window, With<PrimaryWindow>>,
 ) {
     if let (Some(mut freeze_end_frame), None, None) =
         (freeze_end_frame, round_outcome, tournament_complete)
@@ -1151,15 +1068,16 @@ pub fn start_new_round(
                     commands.entity(e).despawn();
                 }
 
-                setup_battle_mode(
+                setup_round(
+                    &mut session_rng.0,
                     commands,
-                    session_rng,
-                    game_textures,
-                    fonts,
-                    hud_colors,
-                    primary_query,
-                    matchbox_config,
-                    frame_count,
+                    *map_size,
+                    *world_type,
+                    &game_textures,
+                    &fonts,
+                    &hud_colors,
+                    matchbox_config.number_of_players,
+                    frame_count.frame,
                 )
             }
         }
@@ -1168,41 +1086,47 @@ pub fn start_new_round(
 
 pub fn start_new_tournament(
     mut commands: Commands,
-    session_rng: ResMut<SessionRng>,
-    query: Query<Entity, Without<Window>>,
+    mut session_rng: ResMut<SessionRng>,
     freeze_end_frame: Option<Res<FreezeEndFrame>>,
     tournament_complete: Option<Res<TournamentComplete>>,
     frame_count: Res<FrameCount>,
     mut leaderboard: ResMut<Leaderboard>,
+    query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
+    map_size: Res<MapSize>,
+    mut world_type: ResMut<WorldType>,
+    matchbox_config: Res<MatchboxConfig>,
     game_textures: ResMut<GameTextures>,
     fonts: Res<Fonts>,
     hud_colors: Res<HUDColors>,
-    primary_query: Query<&mut Window, With<PrimaryWindow>>,
-    matchbox_config: Res<MatchboxConfig>,
 ) {
     if let (Some(freeze_end_frame), Some(_)) = (freeze_end_frame, tournament_complete) {
         if frame_count.frame >= freeze_end_frame.0 {
-            commands.remove_resource::<FreezeEndFrame>();
-            commands.remove_resource::<TournamentComplete>();
-
-            for (_, score) in &mut leaderboard.scores {
-                *score = 0;
-            }
-
+            // clear game state
             for e in query.iter() {
                 // TODO should everything be rollbackable now?
                 commands.entity(e).despawn();
             }
+            commands.remove_resource::<FreezeEndFrame>();
+            commands.remove_resource::<TournamentComplete>();
 
-            setup_battle_mode(
+            // reset the leaderboard
+            for (_, score) in &mut leaderboard.scores {
+                *score = 0;
+            }
+
+            // change the tournament world
+            *world_type = world_type.next_random(&mut session_rng.0);
+
+            setup_round(
+                &mut session_rng.0,
                 commands,
-                session_rng,
-                game_textures,
-                fonts,
-                hud_colors,
-                primary_query,
-                matchbox_config,
-                frame_count,
+                *map_size,
+                *world_type,
+                &game_textures,
+                &fonts,
+                &hud_colors,
+                matchbox_config.number_of_players,
+                frame_count.frame,
             )
         }
     }
