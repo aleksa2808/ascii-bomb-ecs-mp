@@ -10,14 +10,14 @@ mod utils;
 mod web;
 
 use bevy::{ecs as bevy_ecs, prelude::*};
-use bevy_ggrs::{GgrsAppExtension, GgrsPlugin, GgrsSchedule};
+use bevy_ggrs::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 use crate::web::{web_input, web_ready_to_start_update};
-use crate::{components::*, constants::FPS, resources::*, systems::*, types::GGRSConfig};
+use crate::{components::*, constants::FPS, resources::*, systems::*, types::GgrsConfig};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::{
     native::{native_input, Args},
@@ -98,93 +98,97 @@ pub fn run() {
     #[cfg(not(target_arch = "wasm32"))]
     let input_fn = native_input;
 
-    app.add_ggrs_plugin(
-        GgrsPlugin::<GGRSConfig>::new()
-            .with_update_frequency(FPS)
-            .with_input_system(input_fn)
-            // Bevy components
-            .register_rollback_component::<Sprite>()
-            .register_rollback_component::<Transform>()
-            .register_rollback_component::<GlobalTransform>()
-            .register_rollback_component::<Handle<Image>>()
-            .register_rollback_component::<Visibility>()
-            .register_rollback_component::<ComputedVisibility>()
-            // HUD components
-            // TODO not sure if these are necessary
-            .register_rollback_component::<UIRoot>()
-            .register_rollback_component::<UIComponent>()
-            .register_rollback_component::<HUDRoot>()
-            .register_rollback_component::<GameTimerDisplay>()
-            .register_rollback_component::<PenguinPortraitDisplay>()
-            .register_rollback_component::<PenguinPortrait>()
-            .register_rollback_component::<LeaderboardUI>()
-            // game components
-            .register_rollback_component::<Player>()
-            .register_rollback_component::<Dead>()
-            .register_rollback_component::<Penguin>()
-            .register_rollback_component::<Position>()
-            .register_rollback_component::<Bomb>()
-            .register_rollback_component::<Fuse>()
-            .register_rollback_component::<Fire>()
-            .register_rollback_component::<Solid>()
-            .register_rollback_component::<Wall>()
-            .register_rollback_component::<Destructible>()
-            .register_rollback_component::<Crumbling>()
-            .register_rollback_component::<BombSatchel>()
-            .register_rollback_component::<Item>()
-            .register_rollback_component::<BurningItem>()
-            // resources
-            .register_rollback_resource::<FrameCount>()
-            // TODO not sure if this is necessary
-            // .register_rollback_resource::<Leaderboard>()
-            .register_rollback_resource::<RoundOutcome>()
-            .register_rollback_resource::<GameEndFrame>()
-            .register_rollback_resource::<FreezeEndFrame>()
-            // TODO not sure if this is necessary
-            .register_rollback_resource::<TournamentComplete>(),
-    )
-    .add_systems(
-        GgrsSchedule,
-        // list too long for one chain
-        // TODO prune apply_deferred calls
-        (
+    app.add_plugins(GgrsPlugin::<GgrsConfig>::default())
+        .set_rollback_schedule_fps(FPS)
+        .add_systems(ReadInputs, input_fn)
+        // Bevy components
+        .rollback_component_with_clone::<Sprite>()
+        .rollback_component_with_copy::<Transform>()
+        .rollback_component_with_copy::<GlobalTransform>()
+        .rollback_component_with_clone::<Handle<Image>>()
+        .rollback_component_with_copy::<Visibility>()
+        .rollback_component_with_copy::<InheritedVisibility>()
+        .rollback_component_with_copy::<ViewVisibility>()
+        // HUD components
+        // TODO not sure if these are necessary
+        // .rollback_component_with_copy::<UIRoot>()
+        // .rollback_component_with_copy::<UIComponent>()
+        // .rollback_component_with_copy::<HUDRoot>()
+        // .rollback_component_with_copy::<GameTimerDisplay>()
+        // .rollback_component_with_copy::<PenguinPortraitDisplay>()
+        // .rollback_component_with_copy::<PenguinPortrait>()
+        // .rollback_component_with_copy::<LeaderboardUI>()
+        // game components
+        .rollback_component_with_copy::<Player>()
+        .rollback_component_with_copy::<Dead>()
+        .rollback_component_with_copy::<Penguin>()
+        .rollback_component_with_copy::<Position>()
+        .rollback_component_with_copy::<Bomb>()
+        .rollback_component_with_copy::<Fuse>()
+        .rollback_component_with_copy::<Fire>()
+        .rollback_component_with_copy::<Solid>()
+        .rollback_component_with_copy::<Wall>()
+        .rollback_component_with_copy::<Destructible>()
+        .rollback_component_with_copy::<Crumbling>()
+        .rollback_component_with_copy::<BombSatchel>()
+        .rollback_component_with_copy::<Item>()
+        .rollback_component_with_copy::<BurningItem>()
+        // resources
+        .rollback_resource_with_copy::<FrameCount>()
+        // TODO not sure if this is necessary
+        // .rollback_resource_with_copy::<Leaderboard>()
+        .rollback_resource_with_copy::<RoundOutcome>()
+        // .rollback_resource_with_copy::<GameEndFrame>()
+        .rollback_resource_with_copy::<FreezeEndFrame>()
+        // TODO not sure if this is necessary
+        // .rollback_resource_with_copy::<TournamentComplete>()
+        // TODO add checksums
+        .add_systems(
+            GgrsSchedule,
+            // list too long for one chain
+            // TODO prune apply_deferred calls
             (
-                increase_frame_system,
-                show_leaderboard,
-                start_new_round,
-                start_new_tournament,
-                update_hud_clock,
-                update_player_portraits,
-                apply_deferred,
-                player_move,
-                bomb_drop,
-                apply_deferred,
-            )
-                .chain(),
-            (
-                fire_tick,
-                apply_deferred,
-                crumbling_tick,
-                apply_deferred,
-                burning_item_tick,
-                apply_deferred,
-                explode_bombs,
-                apply_deferred,
-                animate_fuse,
-                player_burn,
-                apply_deferred,
-                item_burn,
-                apply_deferred,
-                finish_round,
-                apply_deferred,
-                cleanup_dead,
+                (
+                    increase_frame_system,
+                    show_leaderboard,
+                    start_new_round,
+                    start_new_tournament,
+                    update_hud_clock,
+                    update_player_portraits,
+                    apply_deferred,
+                    player_move,
+                    bomb_drop,
+                    apply_deferred,
+                )
+                    .chain(),
+                (
+                    fire_tick,
+                    apply_deferred,
+                    crumbling_tick,
+                    apply_deferred,
+                    burning_item_tick,
+                    apply_deferred,
+                    explode_bombs,
+                    apply_deferred,
+                    animate_fuse,
+                    player_burn,
+                    apply_deferred,
+                    item_burn,
+                    apply_deferred,
+                    finish_round,
+                    apply_deferred,
+                    cleanup_dead,
+                )
+                    .chain(),
             )
                 .chain(),
         )
-            .chain(),
-    )
-    .insert_resource(FrameCount { frame: 0 })
-    .run();
-
-    app.run();
+        .insert_resource(FrameCount { frame: 0 })
+        // TODO add network stats
+        // .insert_resource(NetworkStatsTimer(Timer::from_seconds(
+        //     2.0,
+        //     TimerMode::Repeating,
+        // )))
+        // .add_systems(Update, print_network_stats_system)
+        .run();
 }

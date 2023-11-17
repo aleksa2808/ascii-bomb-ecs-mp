@@ -10,9 +10,9 @@ pub struct PlayerInput {
 }
 
 #[derive(Debug)]
-pub struct GGRSConfig;
+pub struct GgrsConfig;
 
-impl Config for GGRSConfig {
+impl Config for GgrsConfig {
     type Input = PlayerInput;
     type State = u8;
     type Address = PeerId;

@@ -15,7 +15,7 @@ use crate::{
     resources::*,
     types::Direction,
     utils::{format_hud_time, generate_item_at_position, get_x, get_y, init_hud, spawn_map},
-    AppState, GGRSConfig,
+    AppState, GgrsConfig,
 };
 
 pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<MatchboxConfig>) {
@@ -34,7 +34,7 @@ pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<Matchb
 }
 
 pub fn lobby_startup(mut commands: Commands, fonts: Res<Fonts>) {
-    commands.spawn(Camera3dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
     // All this is just for spawning centered text.
     commands
@@ -74,7 +74,7 @@ pub fn lobby_startup(mut commands: Commands, fonts: Res<Fonts>) {
 }
 
 pub fn lobby_cleanup(
-    query: Query<Entity, Or<(With<LobbyUI>, With<Camera3d>)>>,
+    query: Query<Entity, Or<(With<LobbyUI>, With<Camera2d>)>>,
     mut commands: Commands,
 ) {
     for e in query.iter() {
@@ -113,14 +113,12 @@ pub fn lobby_system(
 
     let max_prediction = 12;
 
-    // create a GGRS P2P session
-    let mut sess_build = SessionBuilder::<GGRSConfig>::new()
+    let mut sess_build = SessionBuilder::<GgrsConfig>::new()
         .with_num_players(matchbox_config.number_of_players)
         .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 10 })
         .with_max_prediction_window(max_prediction)
-        .with_input_delay(2)
-        .with_fps(FPS)
-        .expect("invalid fps");
+        .expect("prediction window can't be 0")
+        .with_input_delay(2);
 
     for (i, player) in players.into_iter().enumerate() {
         sess_build = sess_build
@@ -130,7 +128,6 @@ pub fn lobby_system(
 
     let channel = socket.take_channel(0).unwrap();
 
-    // start the GGRS session
     let sess = sess_build
         .start_p2p_session(channel)
         .expect("failed to start session");
@@ -145,11 +142,11 @@ pub fn lobby_system(
     app_state.set(AppState::InGame);
 }
 
-pub fn log_ggrs_events(mut session: ResMut<Session<GGRSConfig>>) {
+pub fn log_ggrs_events(mut session: ResMut<Session<GgrsConfig>>) {
     match session.as_mut() {
         Session::P2P(s) => {
             for event in s.events() {
-                info!("GGRS Event: {event:?}");
+                info!("GgrsEvent: {event:?}");
             }
         }
         _ => panic!("This example focuses on p2p."),
@@ -337,7 +334,7 @@ pub fn update_player_portraits(
 }
 
 pub fn player_move(
-    inputs: Res<PlayerInputs<GGRSConfig>>,
+    inputs: Res<PlayerInputs<GgrsConfig>>,
     mut p: ParamSet<(
         Query<(&mut Transform, &Penguin, &mut Position, &mut Sprite), With<Player>>,
         Query<&Position, With<Solid>>,
@@ -389,7 +386,7 @@ pub fn player_move(
 
 pub fn bomb_drop(
     mut commands: Commands,
-    inputs: Res<PlayerInputs<GGRSConfig>>,
+    inputs: Res<PlayerInputs<GgrsConfig>>,
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     world_id: Res<WorldID>,
@@ -670,7 +667,7 @@ pub fn explode_bombs(
         .p0()
         .iter()
         .filter(|(_, b, _)| frame_count.frame >= b.expiration_frame)
-        .map(|t| (t.0, t.1.clone(), *t.2))
+        .map(|t| (t.0, *t.1, *t.2))
         .collect();
     for (entity, bomb, position) in v {
         commands.entity(entity).despawn_recursive();

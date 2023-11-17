@@ -10,13 +10,15 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 rand = "0.8"
 itertools = "0.10"
-bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }
-bytemuck = {version = "1.7", features=["derive"]}
-bevy_matchbox = { git = "https://github.com/alepez/matchbox", branch = "bevy-0.11", features = ["ggrs"] }
+bevy_ggrs = { version = "0.14.0" }
+# bevy_ggrs = { path = "../bevy_ggrs" }
+bytemuck = { version = "1.7", features = ["derive"] }
+bevy_matchbox = { version = "0.8.0", features = ["ggrs"] }
+# bevy_matchbox = { path = "../matchbox/bevy_matchbox", features = ["ggrs"] }
 cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-bevy = { version = "0.11", default-features = false, features = [
+bevy = { version = "0.12", default-features = false, features = [
     "dynamic_linking",
     "bevy_winit",
     "png",
@@ -26,12 +28,13 @@ bevy = { version = "0.11", default-features = false, features = [
     "bevy_ui",
     "x11",
     "bevy_asset",
+    "multi-threaded",
 ] }
 clap = { version = "4.3", features = ["derive"] }
 serde = "1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-bevy = { version = "0.11", default-features = false, features = [
+bevy = { version = "0.12", default-features = false, features = [
     "bevy_winit",
     "png",
     "bevy_core_pipeline",
@@ -44,7 +47,3 @@ bevy = { version = "0.11", default-features = false, features = [
 once_cell = "1.8.0"
 parking_lot = "0.12"
 wasm-bindgen = "0.2"
-
-[patch.crates-io]
-ggrs = { git = "https://github.com/gschup/ggrs" }
-bevy_ggrs = { git = "https://github.com/gschup/bevy_ggrs" }

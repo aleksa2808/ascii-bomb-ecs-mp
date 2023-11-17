@@ -1,4 +1,4 @@
-use bevy::{ecs as bevy_ecs, prelude::*, reflect as bevy_reflect, text::Font, utils::HashMap};
+use bevy::{ecs as bevy_ecs, prelude::*, text::Font, utils::HashMap};
 
 use crate::{components::Penguin, constants::COLORS};
 
@@ -53,7 +53,6 @@ impl Default for HUDColors {
     }
 }
 
-#[derive(Default)]
 pub struct MapTextures {
     pub empty: Handle<Image>,
     pub wall: Handle<Image>,
@@ -95,17 +94,17 @@ impl FromWorld for GameTextures {
 
         let map_textures: Vec<MapTextures> = (1..=3)
             .map(|world_id| MapTextures {
-                empty: asset_server.load(format!("sprites/world/{}/empty.png", world_id).as_str()),
-                wall: asset_server.load(format!("sprites/world/{}/wall.png", world_id).as_str()),
+                empty: asset_server.load(format!("sprites/world/{}/empty.png", world_id)),
+                wall: asset_server.load(format!("sprites/world/{}/wall.png", world_id)),
                 destructible_wall: asset_server
-                    .load(format!("sprites/world/{}/destructible_wall.png", world_id).as_str()),
+                    .load(format!("sprites/world/{}/destructible_wall.png", world_id)),
                 burning_wall: asset_server
-                    .load(format!("sprites/world/{}/burning_wall.png", world_id).as_str()),
+                    .load(format!("sprites/world/{}/burning_wall.png", world_id)),
             })
             .collect();
 
         let penguin_variants: Vec<Handle<Image>> = (0..=14)
-            .map(|i| asset_server.load(format!("sprites/penguins/{}.png", i).as_str()))
+            .map(|i| asset_server.load(format!("sprites/penguins/{}.png", i)))
             .collect();
 
         let bomb_texture = asset_server.load("sprites/bomb.png");
@@ -141,39 +140,37 @@ impl FromWorld for GameTextures {
     }
 }
 
-#[derive(Clone, Copy, Resource)]
+#[derive(Resource, Clone, Copy)]
 pub struct MapSize {
     pub rows: usize,
     pub columns: usize,
 }
 
-#[derive(Resource, Default, Clone, Copy)]
+#[derive(Resource, Clone, Copy)]
 pub struct WorldID(pub usize);
 
-#[derive(Resource, Default, Reflect, Hash)]
-#[reflect(Hash)]
+#[derive(Resource, Clone, Copy)]
 pub struct FrameCount {
     pub frame: usize,
 }
 
-#[derive(Resource, Reflect, Default)]
+#[derive(Resource)]
 pub struct Leaderboard {
     pub scores: HashMap<Penguin, usize>,
     pub winning_score: usize,
 }
 
-#[derive(Resource, Reflect, Default, Hash)]
+#[derive(Resource, Clone, Copy)]
 pub enum RoundOutcome {
-    #[default]
     Tie,
     Winner(Penguin),
 }
 
-#[derive(Resource, Reflect, Default, Hash)]
+#[derive(Resource)]
 pub struct GameEndFrame(pub usize);
 
-#[derive(Resource, Reflect, Default, Hash)]
+#[derive(Resource, Clone, Copy)]
 pub struct FreezeEndFrame(pub usize);
 
-#[derive(Resource, Reflect, Default)]
+#[derive(Resource)]
 pub struct TournamentComplete;

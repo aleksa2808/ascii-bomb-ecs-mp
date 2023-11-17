@@ -1,7 +1,4 @@
-use bevy::{
-    ecs as bevy_ecs, prelude::Component, reflect as bevy_reflect, reflect::Reflect,
-    render::color::Color,
-};
+use bevy::{ecs as bevy_ecs, prelude::Component, render::color::Color};
 
 use crate::types::Direction;
 
@@ -14,41 +11,41 @@ pub struct LobbyUI;
 
 // HUD display
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component)]
 pub struct UIRoot;
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component)]
 pub struct UIComponent;
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component)]
 pub struct HUDRoot;
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component)]
 pub struct GameTimerDisplay;
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component)]
 pub struct PenguinPortraitDisplay;
 
-#[derive(Component, Reflect, Default, Hash)]
+#[derive(Component)]
 pub struct PenguinPortrait(pub Penguin);
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component)]
 pub struct LeaderboardUI;
 
 // In-game
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component, Clone, Copy)]
 pub struct Player;
 
-#[derive(Component, Reflect, Default, Hash)]
+#[derive(Component, Clone, Copy)]
 pub struct Dead {
     pub cleanup_frame: usize,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Component, Reflect, Default)]
+#[derive(Component, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Penguin(pub usize);
 
-#[derive(Default, Reflect, Debug, Clone, Copy, PartialEq, Eq, Hash, Component)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Position {
     pub y: isize,
     pub x: isize,
@@ -72,54 +69,52 @@ impl Position {
     }
 }
 
-#[derive(Default, Clone, Reflect, Component, Hash)]
+#[derive(Component, Clone, Copy)]
 pub struct Bomb {
     pub owner: Option<Penguin>,
     pub range: usize,
     pub expiration_frame: usize,
 }
 
-// TODO impl hash?
-#[derive(Component, Reflect, Default)]
+#[derive(Component, Clone, Copy)]
 pub struct Fuse {
     pub color: Color,
     pub start_frame: usize,
 }
 
-#[derive(Component, Reflect, Default, Hash)]
+#[derive(Component, Clone, Copy)]
 pub struct Fire {
     pub expiration_frame: usize,
 }
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component, Clone, Copy)]
 pub struct Solid;
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component, Clone, Copy)]
 pub struct Wall;
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component, Clone, Copy)]
 pub struct Destructible;
 
-#[derive(Component, Reflect, Default, Hash)]
+#[derive(Component, Clone, Copy)]
 pub struct Crumbling {
     pub expiration_frame: usize,
 }
 
-#[derive(Component, Reflect, Default, Hash)]
+#[derive(Component, Clone, Copy)]
 pub struct BombSatchel {
     pub bombs_available: usize,
     pub bomb_range: usize,
 }
 
-#[derive(Component, Reflect, Default, Hash)]
+#[derive(Component, Clone, Copy)]
 pub enum Item {
-    #[default]
     BombsUp,
     RangeUp,
     BombPush,
 }
 
-#[derive(Component, Reflect, Default, Hash)]
+#[derive(Component, Clone, Copy)]
 pub struct BurningItem {
     pub expiration_frame: usize,
 }
