@@ -668,6 +668,7 @@ pub fn explode_bombs(
         (Entity, &Position, &mut Handle<Image>, Option<&Crumbling>),
         (With<Wall>, With<Destructible>),
     >,
+    query2: Query<(Entity, &Position), With<Fire>>,
     frame_count: Res<FrameCount>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
 ) {
@@ -710,6 +711,11 @@ pub fn explode_bombs(
         }
 
         let spawn_fire = |commands: &mut Commands, position: Position| {
+            // remove previous fire at position if it exists
+            for (e, _) in query2.iter().filter(|(_, &p)| p == position) {
+                commands.entity(e).despawn_recursive();
+            }
+
             commands
                 .spawn((
                     SpriteBundle {
