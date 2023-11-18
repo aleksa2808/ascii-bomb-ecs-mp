@@ -343,11 +343,11 @@ pub fn setup_round(
         .with_children(|parent| {
             init_hud(
                 parent,
-                &hud_colors,
-                &fonts,
+                hud_colors,
+                fonts,
                 (map_size.columns * TILE_WIDTH) as f32,
                 world_type,
-                &game_textures,
+                game_textures,
                 &penguin_tags,
             );
         });
@@ -406,7 +406,7 @@ pub fn setup_round(
     spawn_map(
         rng,
         &mut commands,
-        &game_textures,
+        game_textures,
         world_type,
         map_size,
         &player_spawn_positions,
@@ -421,13 +421,13 @@ pub fn generate_item_at_position(
     commands: &mut Commands,
     game_textures: &GameTextures,
 ) {
-    let r = rng.gen::<usize>() % 100;
+    let roll = rng.gen::<usize>() % 100;
 
     /* "Loot tables" */
-    let item = match r {
-        _ if r < 50 => Item::BombsUp,
+    let item = match roll {
+        _ if roll < 50 => Item::BombsUp,
         50..=89 => Item::RangeUp,
-        _ if r >= 90 => Item::BombPush,
+        _ if roll >= 90 => Item::BombPush,
         _ => unreachable!(),
     };
 

@@ -9,6 +9,7 @@ use bevy_matchbox::{
     prelude::PeerState,
     MatchboxSocket,
 };
+use itertools::Itertools;
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 
 use crate::{
@@ -156,7 +157,7 @@ pub fn lobby_system(
 
     let mut sess_build = SessionBuilder::<GgrsConfig>::new()
         .with_num_players(matchbox_config.number_of_players)
-        .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 10 })
+        .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 1 })
         .with_max_prediction_window(max_prediction)
         .expect("prediction window can't be 0")
         .with_input_delay(2);
@@ -197,6 +198,7 @@ pub fn log_ggrs_events(mut session: ResMut<Session<GgrsConfig>>) {
         Session::P2P(s) => {
             for event in s.events() {
                 info!("GgrsEvent: {event:?}");
+                // TODO do something on desyncs
             }
         }
         _ => unreachable!(),
@@ -619,20 +621,17 @@ pub fn crumbling_tick(
         return;
     }
 
-    for (entity, crumbling, position) in query.iter() {
-        if frame_count.frame >= crumbling.expiration_frame {
-            commands.entity(entity).despawn_recursive();
+    for (entity, _, position) in query
+        .iter()
+        .filter(|(_, c, _)| frame_count.frame >= c.expiration_frame)
+        .sorted_unstable_by_key(|(_, _, &p)| p)
+    {
+        commands.entity(entity).despawn_recursive();
 
-            // drop power-up
-            let r = session_rng.0.gen_range(0..100);
-            if r < ITEM_SPAWN_CHANCE_PERCENTAGE {
-                generate_item_at_position(
-                    &mut session_rng.0,
-                    *position,
-                    &mut commands,
-                    &game_textures,
-                );
-            }
+        // drop power-up
+        let roll = session_rng.0.gen_range(0..100);
+        if roll < ITEM_SPAWN_CHANCE_PERCENTAGE {
+            generate_item_at_position(&mut session_rng.0, *position, &mut commands, &game_textures);
         }
     }
 }

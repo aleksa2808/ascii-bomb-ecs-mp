@@ -45,7 +45,7 @@ pub struct Dead {
 #[derive(Component, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Penguin(pub usize);
 
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Position {
     pub y: isize,
     pub x: isize,
@@ -101,13 +101,13 @@ pub struct Crumbling {
     pub expiration_frame: usize,
 }
 
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, Hash)]
 pub struct BombSatchel {
     pub bombs_available: usize,
     pub bomb_range: usize,
 }
 
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, Hash)]
 pub enum Item {
     BombsUp,
     RangeUp,

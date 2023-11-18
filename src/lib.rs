@@ -134,6 +134,7 @@ pub fn run() {
         .rollback_component_with_copy::<Item>()
         .rollback_component_with_copy::<BurningItem>()
         // resources
+        .rollback_resource_with_clone::<SessionRng>()
         .rollback_resource_with_copy::<FrameCount>()
         // TODO not sure if this is necessary
         // .rollback_resource_with_copy::<Leaderboard>()
@@ -142,7 +143,12 @@ pub fn run() {
         .rollback_resource_with_copy::<FreezeEndFrame>()
         // TODO not sure if this is necessary
         // .rollback_resource_with_copy::<TournamentComplete>()
-        // TODO add checksums
+        // TODO what if two items are switched, is their order also hashed?
+        .checksum_component_with_hash::<Penguin>()
+        .checksum_component_with_hash::<Position>()
+        .checksum_component_with_hash::<BombSatchel>()
+        .checksum_component_with_hash::<Item>()
+        // .checksum_resource_with_hash::<SessionRng>()
         .add_systems(
             GgrsSchedule,
             // list too long for one chain

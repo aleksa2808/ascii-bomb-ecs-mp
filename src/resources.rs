@@ -118,7 +118,7 @@ impl FromWorld for GameTextures {
         let burning_item_texture = asset_server.load("sprites/burning_item.png");
         let trophy_texture = asset_server.load("sprites/trophy.png");
 
-        let game_textures = GameTextures {
+        GameTextures {
             penguin_variants: penguin_variants.to_vec(),
             bomb: bomb_texture.clone(),
             fire: fire_texture.clone(),
@@ -128,9 +128,7 @@ impl FromWorld for GameTextures {
             bomb_push: bomb_push_texture.clone(),
             burning_item: burning_item_texture.clone(),
             trophy: trophy_texture.clone(),
-        };
-
-        game_textures
+        }
     }
 }
 
@@ -142,6 +140,7 @@ pub struct MapSize {
 
 // Not to be confused with Bevy ECS `World`!
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(clippy::enum_variant_names)]
 pub enum WorldType {
     GrassWorld,
     IceWorld,
@@ -182,7 +181,7 @@ pub struct RngSeeds {
     pub remote: HashMap<PeerId, u64>,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct SessionRng(pub StdRng);
 
 #[derive(Resource, Clone, Copy)]
@@ -196,7 +195,7 @@ pub struct Leaderboard {
     pub winning_score: usize,
 }
 
-#[derive(Resource, Clone, Copy)]
+#[derive(Resource, Clone, Copy, Hash)]
 pub enum RoundOutcome {
     Tie,
     Winner(Penguin),
