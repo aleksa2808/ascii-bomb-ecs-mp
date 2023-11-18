@@ -78,11 +78,12 @@ pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<Matchb
     let room_url = format!("{}/{}", &matchbox_config.signal_server_address, room_id);
     info!("connecting to matchbox server: {room_url:?}");
 
-    let socket = WebRtcSocketBuilder::new(room_url)
-        .add_ggrs_channel()
-        .add_reliable_channel()
-        .build();
-    commands.insert_resource(MatchboxSocket::from(socket));
+    commands.insert_resource(MatchboxSocket::from(
+        WebRtcSocketBuilder::new(room_url)
+            .add_ggrs_channel()
+            .add_reliable_channel()
+            .build(),
+    ));
 
     let local_seed = rand::random();
     info!("Generated the local RNG seed: {local_seed}");

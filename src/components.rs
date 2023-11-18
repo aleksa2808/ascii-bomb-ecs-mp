@@ -69,6 +69,12 @@ impl Position {
     }
 }
 
+#[derive(Component, Clone, Copy, Hash)]
+pub struct BombSatchel {
+    pub bombs_available: usize,
+    pub bomb_range: usize,
+}
+
 #[derive(Component, Clone, Copy)]
 pub struct Bomb {
     pub owner: Option<Penguin>,
@@ -99,12 +105,6 @@ pub struct Destructible;
 #[derive(Component, Clone, Copy)]
 pub struct Crumbling {
     pub expiration_frame: usize,
-}
-
-#[derive(Component, Clone, Copy, Hash)]
-pub struct BombSatchel {
-    pub bombs_available: usize,
-    pub bomb_range: usize,
 }
 
 #[derive(Component, Clone, Copy, Hash)]
