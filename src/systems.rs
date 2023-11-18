@@ -20,7 +20,9 @@ use crate::{
     },
     resources::*,
     types::Direction,
-    utils::{format_hud_time, generate_item_at_position, get_x, get_y, setup_round},
+    utils::{
+        format_hud_time, generate_item_at_position, get_x, get_y, setup_round, spawn_burning_item,
+    },
     AppState, GgrsConfig,
 };
 
@@ -383,21 +385,7 @@ pub fn pick_up_item(
             (Some(_), Some(_)) => {
                 println!("Multiple players arrived at item position ({:?}) at the same time! In the ensuing chaos the item was destroyed...", ip);
                 commands.entity(ie).despawn_recursive();
-                commands.spawn((
-                    SpriteBundle {
-                        texture: game_textures.burning_item.clone(),
-                        transform: Transform::from_xyz(get_x(ip.x), get_y(ip.y), 20.0),
-                        sprite: Sprite {
-                            custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    },
-                    *ip,
-                    BurningItem {
-                        expiration_frame: frame_count.frame + FPS / 2,
-                    },
-                ));
+                spawn_burning_item(&mut commands, &game_textures, *ip, frame_count.frame);
             }
             (None, Some(_)) => unreachable!(),
         }
@@ -631,7 +619,7 @@ pub fn crumbling_tick(
         // drop power-up
         let roll = session_rng.0.gen_range(0..100);
         if roll < ITEM_SPAWN_CHANCE_PERCENTAGE {
-            generate_item_at_position(&mut session_rng.0, *position, &mut commands, &game_textures);
+            generate_item_at_position(&mut session_rng.0, &mut commands, &game_textures, *position);
         }
     }
 }
@@ -647,10 +635,11 @@ pub fn burning_item_tick(
         return;
     }
 
-    for (entity, burning_item) in query.iter() {
-        if frame_count.frame >= burning_item.expiration_frame {
-            commands.entity(entity).despawn_recursive();
-        }
+    for (entity, _) in query
+        .iter()
+        .filter(|(_, bi)| frame_count.frame >= bi.expiration_frame)
+    {
+        commands.entity(entity).despawn_recursive();
     }
 }
 
@@ -816,25 +805,9 @@ pub fn item_burn(
 
     let fire_positions: HashSet<Position> = query2.iter().copied().collect();
 
-    for (entity, position) in query.iter() {
-        if fire_positions.contains(position) {
-            commands.entity(entity).despawn_recursive();
-            commands.spawn((
-                SpriteBundle {
-                    texture: game_textures.burning_item.clone(),
-                    transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 20.0),
-                    sprite: Sprite {
-                        custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                *position,
-                BurningItem {
-                    expiration_frame: frame_count.frame + FPS / 2,
-                },
-            ));
-        }
+    for (entity, &position) in query.iter().filter(|(_, p)| fire_positions.contains(*p)) {
+        commands.entity(entity).despawn_recursive();
+        spawn_burning_item(&mut commands, &game_textures, position, frame_count.frame);
     }
 }
 

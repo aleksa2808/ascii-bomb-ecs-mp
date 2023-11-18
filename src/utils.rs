@@ -12,8 +12,9 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
 use crate::{
     components::{
-        BombSatchel, Destructible, GameTimerDisplay, HUDRoot, Item, Penguin, PenguinPortrait,
-        PenguinPortraitDisplay, Player, Position, Solid, UIComponent, UIRoot, Wall,
+        BombSatchel, BurningItem, Destructible, GameTimerDisplay, HUDRoot, Item, Penguin,
+        PenguinPortrait, PenguinPortraitDisplay, Player, Position, Solid, UIComponent, UIRoot,
+        Wall,
     },
     constants::{
         COLORS, FPS, HUD_HEIGHT, PIXEL_SCALE, ROUND_DURATION_SECS, TILE_HEIGHT, TILE_WIDTH,
@@ -417,9 +418,9 @@ pub fn setup_round(
 
 pub fn generate_item_at_position(
     rng: &mut StdRng,
-    position: Position,
     commands: &mut Commands,
     game_textures: &GameTextures,
+    position: Position,
 ) {
     let roll = rng.gen::<usize>() % 100;
 
@@ -450,4 +451,27 @@ pub fn generate_item_at_position(
             item,
         ))
         .add_rollback();
+}
+
+pub fn spawn_burning_item(
+    commands: &mut Commands,
+    game_textures: &GameTextures,
+    position: Position,
+    current_frame: usize,
+) {
+    commands.spawn((
+        SpriteBundle {
+            texture: game_textures.burning_item.clone(),
+            transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 20.0),
+            sprite: Sprite {
+                custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        position,
+        BurningItem {
+            expiration_frame: current_frame + FPS / 2,
+        },
+    ));
 }
