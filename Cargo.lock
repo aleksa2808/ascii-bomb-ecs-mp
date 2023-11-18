@@ -909,8 +909,7 @@ dependencies = [
 [[package]]
 name = "bevy_matchbox"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "641b6eac7a2022eb3033fe14b5cef59a68f65fad30620291c8d6f84eab3d9ec5"
+source = "git+https://github.com/aleksa2808/matchbox?branch=fix/players-method-multiple-channels#b31d1b01e7224ac1e6abacbf94da4e725e88a4c3"
 dependencies = [
  "bevy",
  "cfg-if",
@@ -2771,8 +2770,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a08a1627b52e1a4053d330511747d8385692d780a59b75df078be3dcdd06eb85"
+source = "git+https://github.com/aleksa2808/matchbox?branch=fix/players-method-multiple-channels#b31d1b01e7224ac1e6abacbf94da4e725e88a4c3"
 dependencies = [
  "cfg-if",
  "derive_more",
@@ -2783,8 +2781,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be4f2888b9ac0198f873cbe44bb82649e7fa90dfa4c21e6a30320997387d0dd8"
+source = "git+https://github.com/aleksa2808/matchbox?branch=fix/players-method-multiple-channels#b31d1b01e7224ac1e6abacbf94da4e725e88a4c3"
 dependencies = [
  "async-compat",
  "async-trait",

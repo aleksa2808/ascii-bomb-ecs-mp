@@ -13,8 +13,11 @@ itertools = "0.10"
 bevy_ggrs = { version = "0.14.0" }
 # bevy_ggrs = { path = "../bevy_ggrs" }
 bytemuck = { version = "1.7", features = ["derive"] }
-bevy_matchbox = { version = "0.8.0", features = ["ggrs"] }
+# bevy_matchbox = { version = "0.8.0", features = ["ggrs"] }
 # bevy_matchbox = { path = "../matchbox/bevy_matchbox", features = ["ggrs"] }
+bevy_matchbox = { git = "https://github.com/aleksa2808/matchbox", branch = "fix/players-method-multiple-channels", features = [
+    "ggrs",
+] }
 cfg-if = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

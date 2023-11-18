@@ -1,7 +1,12 @@
-use bevy::{prelude::*, utils::HashSet, window::PrimaryWindow};
+use bevy::{
+    prelude::*,
+    utils::{HashMap, HashSet},
+    window::PrimaryWindow,
+};
 use bevy_ggrs::{ggrs::SessionBuilder, AddRollbackCommandExtension, PlayerInputs, Session};
 use bevy_matchbox::{
-    prelude::{PeerState, SingleChannel},
+    matchbox_socket::{MultipleChannels, WebRtcSocketBuilder},
+    prelude::PeerState,
     MatchboxSocket,
 };
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
@@ -17,21 +22,6 @@ use crate::{
     utils::{format_hud_time, generate_item_at_position, get_x, get_y, setup_round},
     AppState, GgrsConfig,
 };
-
-pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<MatchboxConfig>) {
-    let room_id = match &matchbox_config.room {
-        Some(id) => id.clone(),
-        None => format!(
-            "ascii_bomb_ecs_mp?next={}",
-            &matchbox_config.number_of_players
-        ),
-    };
-
-    let room_url = format!("{}/{}", &matchbox_config.signal_server_address, room_id);
-    info!("connecting to matchbox server: {room_url:?}");
-
-    commands.insert_resource(MatchboxSocket::new_ggrs(room_url));
-}
 
 pub fn setup_lobby(mut commands: Commands, fonts: Res<Fonts>) {
     commands.spawn(Camera2dBundle::default());
@@ -73,19 +63,37 @@ pub fn setup_lobby(mut commands: Commands, fonts: Res<Fonts>) {
         .insert(LobbyUI);
 }
 
-pub fn teardown_lobby(
-    query: Query<Entity, Or<(With<LobbyUI>, With<Camera2d>)>>,
-    mut commands: Commands,
-) {
-    for e in query.iter() {
-        commands.entity(e).despawn_recursive();
-    }
+pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<MatchboxConfig>) {
+    let room_id = match &matchbox_config.room {
+        Some(id) => id.clone(),
+        None => format!(
+            "ascii_bomb_ecs_mp?next={}",
+            &matchbox_config.number_of_players
+        ),
+    };
+
+    let room_url = format!("{}/{}", &matchbox_config.signal_server_address, room_id);
+    info!("connecting to matchbox server: {room_url:?}");
+
+    let socket = WebRtcSocketBuilder::new(room_url)
+        .add_ggrs_channel()
+        .add_reliable_channel()
+        .build();
+    commands.insert_resource(MatchboxSocket::from(socket));
+
+    let local_seed = rand::random();
+    info!("Generated the local RNG seed: {local_seed}");
+    commands.insert_resource(RngSeeds {
+        local: local_seed,
+        remote: HashMap::with_capacity(matchbox_config.number_of_players - 1),
+    });
 }
 
 pub fn lobby_system(
     mut app_state: ResMut<NextState<AppState>>,
     matchbox_config: Res<MatchboxConfig>,
-    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+    mut socket: ResMut<MatchboxSocket<MultipleChannels>>,
+    mut rng_seeds: ResMut<RngSeeds>,
     mut commands: Commands,
     mut query: Query<&mut Text, With<LobbyText>>,
 ) {
@@ -93,22 +101,52 @@ pub fn lobby_system(
     for (peer, new_state) in socket.update_peers() {
         // you can also handle the specific dis(connections) as they occur:
         match new_state {
-            PeerState::Connected => info!("peer {peer} connected"),
+            PeerState::Connected => {
+                info!("peer {peer} connected, sending them our local RNG seed");
+                let packet = rng_seeds.local.to_be_bytes().to_vec().into_boxed_slice();
+                socket.channel(1).send(packet, peer);
+            }
             PeerState::Disconnected => info!("peer {peer} disconnected"),
         }
     }
 
-    let connected_peers = socket.connected_peers().count();
-    let remaining = matchbox_config.number_of_players - (connected_peers + 1);
-    query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)",);
+    for (peer, packet) in socket.channel(1).receive() {
+        // decode the message
+        assert!(packet.len() == 8);
+        let mut remote_seed = [0; 8];
+        packet
+            .iter()
+            .enumerate()
+            .for_each(|(i, &b)| remote_seed[i] = b);
+        let remote_seed = u64::from_be_bytes(remote_seed);
+
+        info!("Got RNG seed from {peer}: {remote_seed}");
+        let old_value = rng_seeds.remote.insert(peer, remote_seed);
+        assert!(
+            old_value.is_none(),
+            "Received RNG seed from {} twice!",
+            peer
+        );
+    }
+
+    let remaining = matchbox_config.number_of_players - (rng_seeds.remote.len() + 1);
+    query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)");
     if remaining > 0 {
         return;
     }
 
-    info!("All peers have joined, going in-game");
+    let shared_seed = rng_seeds.local
+        ^ rng_seeds
+            .remote
+            .values()
+            .copied()
+            .reduce(|acc, e| acc ^ e)
+            .unwrap();
+    info!("Generated the shared RNG seed: {shared_seed}");
+    commands.remove_resource::<RngSeeds>();
+    commands.insert_resource(SessionRng(StdRng::seed_from_u64(shared_seed)));
 
-    // TODO combine rng seed from players
-    commands.insert_resource(SessionRng(StdRng::seed_from_u64(42)));
+    info!("All peers have joined and the shared RNG seed was created, going in-game");
 
     // extract final player list
     let players = socket.players();
@@ -143,6 +181,15 @@ pub fn lobby_system(
         winning_score: 3,
     });
     app_state.set(AppState::InGame);
+}
+
+pub fn teardown_lobby(
+    query: Query<Entity, Or<(With<LobbyUI>, With<Camera2d>)>>,
+    mut commands: Commands,
+) {
+    for e in query.iter() {
+        commands.entity(e).despawn_recursive();
+    }
 }
 
 pub fn log_ggrs_events(mut session: ResMut<Session<GgrsConfig>>) {

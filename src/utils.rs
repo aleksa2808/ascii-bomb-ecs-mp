@@ -16,8 +16,7 @@ use crate::{
         PenguinPortraitDisplay, Player, Position, Solid, UIComponent, UIRoot, Wall,
     },
     constants::{
-        BATTLE_MODE_ROUND_DURATION_SECS, COLORS, FPS, HUD_HEIGHT, PIXEL_SCALE, TILE_HEIGHT,
-        TILE_WIDTH,
+        COLORS, FPS, HUD_HEIGHT, PIXEL_SCALE, ROUND_DURATION_SECS, TILE_HEIGHT, TILE_WIDTH,
     },
     resources::{Fonts, GameEndFrame, GameTextures, HUDColors, MapSize, WorldType},
     types::Direction,
@@ -88,7 +87,8 @@ fn init_hud(
                     parent.spawn((
                         TextBundle {
                             text: Text::from_section(
-                                "",
+                                // TODO this is here because the ggrs systems don't seem to start immediately, so the timer has a visual issue; investigate why
+                                format_hud_time(ROUND_DURATION_SECS),
                                 TextStyle {
                                     font: fonts.mono.clone(),
                                     font_size: 2.0 * PIXEL_SCALE as f32,
@@ -412,9 +412,7 @@ pub fn setup_round(
         &player_spawn_positions,
     );
 
-    commands.insert_resource(GameEndFrame(
-        current_frame + BATTLE_MODE_ROUND_DURATION_SECS * FPS,
-    ));
+    commands.insert_resource(GameEndFrame(current_frame + ROUND_DURATION_SECS * FPS));
 }
 
 pub fn generate_item_at_position(

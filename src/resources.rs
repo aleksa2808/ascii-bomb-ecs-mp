@@ -1,14 +1,8 @@
 use bevy::{ecs as bevy_ecs, prelude::*, text::Font, utils::HashMap};
+use bevy_matchbox::matchbox_socket::PeerId;
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
 use crate::{components::Penguin, constants::COLORS};
-
-#[derive(Resource)]
-pub struct MatchboxConfig {
-    pub signal_server_address: String,
-    pub room: Option<String>,
-    pub number_of_players: usize,
-}
 
 #[derive(Resource)]
 pub struct Fonts {
@@ -173,6 +167,19 @@ impl WorldType {
             .choose(rng)
             .unwrap()
     }
+}
+
+#[derive(Resource)]
+pub struct MatchboxConfig {
+    pub signal_server_address: String,
+    pub room: Option<String>,
+    pub number_of_players: usize,
+}
+
+#[derive(Resource)]
+pub struct RngSeeds {
+    pub local: u64,
+    pub remote: HashMap<PeerId, u64>,
 }
 
 #[derive(Resource)]
