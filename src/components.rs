@@ -34,8 +34,10 @@ pub struct LeaderboardUI;
 
 // In-game
 
-#[derive(Component, Clone, Copy)]
-pub struct Player;
+#[derive(Component, Clone, Copy, Default)]
+pub struct Player {
+    pub can_push_bombs: bool,
+}
 
 #[derive(Component, Clone, Copy)]
 pub struct Dead {
@@ -80,6 +82,7 @@ pub struct Bomb {
     pub owner: Option<Penguin>,
     pub range: usize,
     pub expiration_frame: usize,
+    pub moving: Option<Direction>,
 }
 
 #[derive(Component, Clone, Copy)]

@@ -302,8 +302,15 @@ pub fn update_player_portraits(
 pub fn player_move(
     inputs: Res<PlayerInputs<GgrsConfig>>,
     mut p: ParamSet<(
-        Query<(&mut Transform, &Penguin, &mut Position, &mut Sprite), With<Player>>,
-        Query<&Position, With<Solid>>,
+        Query<(
+            &Player,
+            &Penguin,
+            &mut Position,
+            &mut Transform,
+            &mut Sprite,
+        )>,
+        Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
+        Query<&mut Bomb>,
     )>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
 ) {
@@ -313,11 +320,18 @@ pub fn player_move(
         return;
     }
 
-    let solids: HashSet<Position> = p.p1().iter().copied().collect();
+    let solids: HashMap<Position, Option<Entity>> = p
+        .p1()
+        .iter()
+        .map(|(solid_entity, solid_position, optional_bomb)| {
+            (*solid_position, optional_bomb.map(|_| solid_entity))
+        })
+        .collect();
 
-    for (mut transform, penguin, mut position, mut sprite) in p.p0().iter_mut() {
+    let mut bomb_move_vec = vec![];
+    for (player, penguin, mut position, mut transform, mut sprite) in p.p0().iter_mut() {
         let input = inputs[penguin.0].0.inp;
-        for (input_mask, direction) in [
+        for (input_mask, moving_direction) in [
             (INPUT_UP, Direction::Up),
             (INPUT_DOWN, Direction::Down),
             (INPUT_LEFT, Direction::Left),
@@ -325,26 +339,57 @@ pub fn player_move(
         ] {
             if input & input_mask != 0 {
                 // visual / sprite flipping
-                match direction {
+                match moving_direction {
                     Direction::Left => sprite.flip_x = true,
                     Direction::Right => sprite.flip_x = false,
                     _ => (),
                 }
 
-                let new_position = position.offset(direction, 1);
+                let new_position = position.offset(moving_direction, 1);
                 let solid = solids.get(&new_position);
 
-                let mut moved = false;
-                if solid.is_none() {
+                if let Some(&optional_bomb_entity) = solid {
+                    if player.can_push_bombs {
+                        if let Some(bomb_entity) = optional_bomb_entity {
+                            // TODO figure out how to get a &mut Bomb from the solids query in order to avoid this workaround
+                            bomb_move_vec.push((bomb_entity, moving_direction));
+                        }
+                    }
+                } else {
                     *position = new_position;
-                    moved = true;
-                }
-
-                if moved {
                     let translation = &mut transform.translation;
                     translation.x = get_x(position.x);
                     translation.y = get_y(position.y);
                 }
+            }
+        }
+    }
+
+    for (bomb_entity, direction) in bomb_move_vec {
+        p.p2().get_mut(bomb_entity).unwrap().moving = Some(direction);
+    }
+}
+
+pub fn bomb_move(
+    mut p: ParamSet<(
+        Query<(&mut Bomb, &mut Position, &mut Transform)>,
+        Query<&Position, Or<(With<Solid>, With<Item>, With<Player>)>>,
+    )>,
+) {
+    let impassable_positions: HashSet<Position> = p.p1().iter().copied().collect();
+
+    for (mut bomb, mut position, mut transform) in p.p0().iter_mut() {
+        if let Some(direction) = bomb.moving {
+            // TODO bomb movement is fixed to once per frame
+            let new_position = position.offset(direction, 1);
+            if impassable_positions.get(&new_position).is_none() {
+                *position = new_position;
+
+                let translation = &mut transform.translation;
+                translation.x = get_x(position.x);
+                translation.y = get_y(position.y);
+            } else {
+                bomb.moving = None;
             }
         }
     }
@@ -353,7 +398,7 @@ pub fn player_move(
 pub fn pick_up_item(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
-    mut query: Query<(Entity, &Position, &mut BombSatchel), With<Player>>,
+    mut query: Query<(&mut Player, &Position, &mut BombSatchel)>,
     query2: Query<(Entity, &Item, &Position)>,
     frame_count: Res<FrameCount>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
@@ -363,30 +408,41 @@ pub fn pick_up_item(
         return;
     }
 
-    for (ie, i, ip) in query2.iter() {
-        let mut it = query
-            .iter_mut()
-            .filter_map(|(e, pp, bs)| if *pp == *ip { Some((e, bs)) } else { None });
-        match (it.next(), it.next()) {
+    for (item_entity, &item, &item_position) in query2.iter() {
+        let mut players_at_item_position =
+            query
+                .iter_mut()
+                .filter_map(|(player, &player_position, bomb_satchel)| {
+                    (player_position == item_position).then_some((player, bomb_satchel))
+                });
+        match (
+            players_at_item_position.next(),
+            players_at_item_position.next(),
+        ) {
             (None, None) => {
                 // There are no players at this position
             }
-            (Some((_pe, mut bomb_satchel)), None) => {
-                println!("powered up: {:?}", ip);
-                match i {
+            (Some((mut player, mut bomb_satchel)), None) => {
+                println!("powered up: {item_position:?}");
+                match item {
                     Item::BombsUp => bomb_satchel.bombs_available += 1,
                     Item::RangeUp => bomb_satchel.bomb_range += 1,
                     Item::BombPush => {
-                        // commands.entity(pe).insert(BombPush);
+                        player.can_push_bombs = true;
                     }
                 };
 
-                commands.entity(ie).despawn_recursive();
+                commands.entity(item_entity).despawn_recursive();
             }
             (Some(_), Some(_)) => {
-                println!("Multiple players arrived at item position ({:?}) at the same time! In the ensuing chaos the item was destroyed...", ip);
-                commands.entity(ie).despawn_recursive();
-                spawn_burning_item(&mut commands, &game_textures, *ip, frame_count.frame);
+                println!("Multiple players arrived at item position ({item_position:?}) at the same time! In the ensuing chaos the item was destroyed...");
+                commands.entity(item_entity).despawn_recursive();
+                spawn_burning_item(
+                    &mut commands,
+                    &game_textures,
+                    item_position,
+                    frame_count.frame,
+                );
             }
             (None, Some(_)) => unreachable!(),
         }
@@ -432,6 +488,7 @@ pub fn bomb_drop(
                         owner: Some(*penguin),
                         range: bomb_satchel.bomb_range,
                         expiration_frame: frame_count.frame + 2 * FPS,
+                        moving: None,
                     },
                     Solid,
                     *position,

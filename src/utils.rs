@@ -391,7 +391,7 @@ pub fn setup_round(
                     },
                     ..Default::default()
                 },
-                Player,
+                Player::default(),
                 penguin_tag,
                 player_spawn_position,
                 BombSatchel {
