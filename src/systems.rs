@@ -16,10 +16,11 @@ use crate::{
     components::*,
     constants::{
         COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP,
-        ITEM_SPAWN_CHANCE_PERCENTAGE, PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH,
+        ITEM_SPAWN_CHANCE_PERCENTAGE, PIXEL_SCALE, PLAYER_DEATH_FRAME_DELAY, TILE_HEIGHT,
+        TILE_WIDTH,
     },
     resources::*,
-    types::Direction,
+    types::{Direction, PlayerID},
     utils::{
         format_hud_time, generate_item_at_position, get_x, get_y, setup_round, spawn_burning_item,
     },
@@ -181,7 +182,7 @@ pub fn lobby_system(
 
     // transition to game state
     commands.insert_resource(Leaderboard {
-        scores: (0..player_count).map(|p| (Penguin(p), 0)).collect(),
+        scores: (0..player_count).map(|p| (PlayerID(p), 0)).collect(),
         winning_score: 3,
     });
     app_state.set(AppState::InGame);
@@ -285,13 +286,13 @@ pub fn update_hud_clock(
 }
 
 pub fn update_player_portraits(
-    query: Query<&Penguin>,
-    mut query2: Query<(&mut Visibility, &PenguinPortrait)>,
+    query: Query<&Player>,
+    mut query2: Query<(&mut Visibility, &PlayerPortrait)>,
 ) {
-    let players: HashSet<Penguin> = query.iter().copied().collect();
+    let player_ids: HashSet<PlayerID> = query.iter().map(|player| player.id).collect();
 
     for (mut visibility, portrait) in query2.iter_mut() {
-        if players.contains(&portrait.0) {
+        if player_ids.contains(&portrait.0) {
             *visibility = Visibility::Visible;
         } else {
             *visibility = Visibility::Hidden;
@@ -302,13 +303,7 @@ pub fn update_player_portraits(
 pub fn player_move(
     inputs: Res<PlayerInputs<GgrsConfig>>,
     mut p: ParamSet<(
-        Query<(
-            &Player,
-            &Penguin,
-            &mut Position,
-            &mut Transform,
-            &mut Sprite,
-        )>,
+        Query<(&Player, &mut Position, &mut Transform, &mut Sprite)>,
         Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
         Query<&mut Bomb>,
     )>,
@@ -329,8 +324,8 @@ pub fn player_move(
         .collect();
 
     let mut bomb_move_vec = vec![];
-    for (player, penguin, mut position, mut transform, mut sprite) in p.p0().iter_mut() {
-        let input = inputs[penguin.0].0.inp;
+    for (player, mut position, mut transform, mut sprite) in p.p0().iter_mut() {
+        let input = inputs[player.id.0].0.inp;
         for (input_mask, moving_direction) in [
             (INPUT_UP, Direction::Up),
             (INPUT_DOWN, Direction::Down),
@@ -455,7 +450,7 @@ pub fn bomb_drop(
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     world_type: Res<WorldType>,
-    mut query: Query<(&Penguin, &Position, &mut BombSatchel), With<Player>>,
+    mut query: Query<(&Player, &Position, &mut BombSatchel)>,
     query2: Query<&Position, Or<(With<Solid>, With<BurningItem>)>>,
     frame_count: Res<FrameCount>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
@@ -465,8 +460,8 @@ pub fn bomb_drop(
         return;
     }
 
-    for (penguin, position, mut bomb_satchel) in query.iter_mut() {
-        if inputs[penguin.0].0.inp & INPUT_ACTION != 0
+    for (player, position, mut bomb_satchel) in query.iter_mut() {
+        if inputs[player.id.0].0.inp & INPUT_ACTION != 0
             && bomb_satchel.bombs_available > 0
             && !query2.iter().any(|p| *p == *position)
         {
@@ -485,7 +480,7 @@ pub fn bomb_drop(
                         ..Default::default()
                     },
                     Bomb {
-                        owner: Some(*penguin),
+                        owner: Some(player.id),
                         range: bomb_satchel.bomb_range,
                         expiration_frame: frame_count.frame + 2 * FPS,
                         moving: None,
@@ -710,7 +705,7 @@ pub fn explode_bombs(
         Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
         Query<(&mut Bomb, &Position)>,
     )>,
-    mut query3: Query<(&Penguin, &mut BombSatchel)>,
+    mut query3: Query<(&Player, &mut BombSatchel)>,
     mut query: Query<
         (Entity, &Position, &mut Handle<Image>, Option<&Crumbling>),
         (With<Wall>, With<Destructible>),
@@ -750,8 +745,8 @@ pub fn explode_bombs(
         if let Some(owner) = bomb.owner {
             if let Some(mut bomb_satchel) = query3
                 .iter_mut()
-                .find(|(p, _)| **p == owner)
-                .map(|(_, s)| s)
+                .find(|(player, _)| player.id == owner)
+                .map(|(_, bomb_satchel)| bomb_satchel)
             {
                 bomb_satchel.bombs_available += 1;
             }
@@ -825,7 +820,7 @@ pub fn explode_bombs(
 
 pub fn player_burn(
     mut commands: Commands,
-    query: Query<(Entity, &Position, &Penguin), With<Player>>,
+    query: Query<(Entity, &Player, &Position)>,
     query2: Query<&Position, With<Fire>>,
     frame_count: Res<FrameCount>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
@@ -837,12 +832,12 @@ pub fn player_burn(
 
     let fire_positions: HashSet<Position> = query2.iter().copied().collect();
 
-    for (e, p, penguin) in query.iter() {
-        if fire_positions.contains(p) {
-            println!("Player death: {}, position: {p:?}", penguin.0);
-            commands.entity(e).remove::<Player>();
-            commands.entity(e).insert(Dead {
-                cleanup_frame: frame_count.frame + FPS / 2,
+    for (entity, player, position) in query.iter() {
+        if fire_positions.contains(position) {
+            println!("Player {} burned at position {position:?}!", player.id.0);
+            commands.entity(entity).remove::<Player>();
+            commands.entity(entity).insert(Dead {
+                cleanup_frame: frame_count.frame + PLAYER_DEATH_FRAME_DELAY,
             });
         }
     }
@@ -871,7 +866,7 @@ pub fn item_burn(
 
 pub fn finish_round(
     mut commands: Commands,
-    query: Query<&Penguin, With<Player>>,
+    query: Query<&Player>,
     frame_count: Res<FrameCount>,
     game_end_frame: Res<GameEndFrame>,
     freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
@@ -886,8 +881,8 @@ pub fn finish_round(
         commands.insert_resource(RoundOutcome::Tie);
 
         round_over = true;
-    } else if let Ok(penguin) = query.get_single() {
-        commands.insert_resource(RoundOutcome::Winner(*penguin));
+    } else if let Ok(player) = query.get_single() {
+        commands.insert_resource(RoundOutcome::Winner(player.id));
 
         round_over = true;
     }
@@ -932,9 +927,9 @@ pub fn show_leaderboard(
     {
         if frame_count.frame >= freeze_end_frame.0 {
             match round_outcome {
-                RoundOutcome::Winner(penguin) => {
-                    println!("Winner: {:?}", penguin.0);
-                    *leaderboard.scores.get_mut(penguin).unwrap() += 1;
+                RoundOutcome::Winner(player_id) => {
+                    println!("Winner: {:?}", player_id.0);
+                    *leaderboard.scores.get_mut(player_id).unwrap() += 1;
                 }
                 RoundOutcome::Tie => println!("Tie!"),
             }
@@ -1002,8 +997,8 @@ pub fn show_leaderboard(
                             spawn_color(height - 1, x);
                         }
 
-                        for (penguin, score) in &leaderboard.scores {
-                            // spawn penguin portrait
+                        for (&player_id, &score) in &leaderboard.scores {
+                            // spawn player portrait
                             parent
                                 .spawn((
                                     NodeBundle {
@@ -1011,7 +1006,7 @@ pub fn show_leaderboard(
                                             position_type: PositionType::Absolute,
                                             left: Val::Px(4.0 * PIXEL_SCALE as f32),
                                             top: Val::Px(
-                                                ((6 + penguin.0 * 12) * PIXEL_SCALE) as f32,
+                                                ((6 + player_id.0 * 12) * PIXEL_SCALE) as f32,
                                             ),
                                             width: Val::Px(TILE_WIDTH as f32),
                                             height: Val::Px(TILE_HEIGHT as f32),
@@ -1031,7 +1026,7 @@ pub fn show_leaderboard(
                                                 ..Default::default()
                                             },
                                             image: game_textures
-                                                .get_penguin_texture(*penguin)
+                                                .get_player_texture(player_id)
                                                 .clone()
                                                 .into(),
                                             ..Default::default()
@@ -1040,14 +1035,14 @@ pub fn show_leaderboard(
                                     ));
                                 });
 
-                            // spawn penguin trophies
-                            for i in 0..*score {
+                            // spawn player trophies
+                            for i in 0..score {
                                 parent.spawn((
                                     ImageBundle {
                                         style: Style {
                                             position_type: PositionType::Absolute,
                                             top: Val::Px(
-                                                ((7 + penguin.0 * 12) * PIXEL_SCALE) as f32,
+                                                ((7 + player_id.0 * 12) * PIXEL_SCALE) as f32,
                                             ),
                                             left: Val::Px(((15 + i * 9) * PIXEL_SCALE) as f32),
                                             width: Val::Px(5.0 * PIXEL_SCALE as f32),
@@ -1061,8 +1056,8 @@ pub fn show_leaderboard(
                                 ));
                             }
 
-                            if let RoundOutcome::Winner(round_winner_penguin) = round_outcome {
-                                if penguin == round_winner_penguin {
+                            if let RoundOutcome::Winner(round_winner_player_id) = *round_outcome {
+                                if player_id == round_winner_player_id {
                                     let mut place_text = |y, x, str: &str, c: usize| {
                                         parent.spawn((
                                             TextBundle {
@@ -1087,19 +1082,19 @@ pub fn show_leaderboard(
                                     };
 
                                     place_text(
-                                        6 + penguin.0 * 12,
+                                        6 + player_id.0 * 12,
                                         15 + (score - 1) * 9 - 2,
                                         "*",
                                         15,
                                     );
                                     place_text(
-                                        8 + penguin.0 * 12,
+                                        8 + player_id.0 * 12,
                                         15 + (score - 1) * 9 + 6,
                                         "*",
                                         15,
                                     );
                                     place_text(
-                                        10 + penguin.0 * 12,
+                                        10 + player_id.0 * 12,
                                         15 + (score - 1) * 9 - 1,
                                         "*",
                                         15,
@@ -1138,7 +1133,7 @@ pub fn start_new_round(
                 .iter()
                 .find(|(_, u)| **u >= leaderboard.winning_score)
             {
-                println!("Penguin {} WINNER WINNER CHICKEN DINNER", p.0);
+                println!("Player {} WINNER WINNER CHICKEN DINNER", p.0);
                 freeze_end_frame.0 = frame_count.frame + 5 * FPS;
                 commands.insert_resource(TournamentComplete);
 

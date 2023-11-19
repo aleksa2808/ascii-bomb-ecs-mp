@@ -33,6 +33,9 @@ impl From<RGBColor> for BackgroundColor {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PlayerID(pub usize);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Direction {
     Left,

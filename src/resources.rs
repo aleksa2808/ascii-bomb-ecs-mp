@@ -2,7 +2,7 @@ use bevy::{ecs as bevy_ecs, prelude::*, text::Font, utils::HashMap};
 use bevy_matchbox::matchbox_socket::PeerId;
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
-use crate::{components::Penguin, constants::COLORS};
+use crate::{constants::COLORS, types::PlayerID};
 
 #[derive(Resource)]
 pub struct Fonts {
@@ -78,8 +78,12 @@ impl GameTextures {
         &self.map_textures[&world_type]
     }
 
-    pub fn get_penguin_texture(&self, penguin: Penguin) -> &Handle<Image> {
-        self.penguin_variants.iter().cycle().nth(penguin.0).unwrap()
+    pub fn get_player_texture(&self, player_id: PlayerID) -> &Handle<Image> {
+        self.penguin_variants
+            .iter()
+            .cycle()
+            .nth(player_id.0)
+            .unwrap()
     }
 }
 
@@ -191,14 +195,14 @@ pub struct FrameCount {
 
 #[derive(Resource)]
 pub struct Leaderboard {
-    pub scores: HashMap<Penguin, usize>,
+    pub scores: HashMap<PlayerID, usize>,
     pub winning_score: usize,
 }
 
 #[derive(Resource, Clone, Copy, Hash)]
 pub enum RoundOutcome {
     Tie,
-    Winner(Penguin),
+    Winner(PlayerID),
 }
 
 #[derive(Resource)]

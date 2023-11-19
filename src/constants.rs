@@ -36,6 +36,8 @@ pub const INPUT_ACTION: u8 = 1 << 4;
 
 pub const ROUND_DURATION_SECS: usize = 120;
 
+pub const PLAYER_DEATH_FRAME_DELAY: usize = FPS / 2;
+
 // TODO does float precision cause desyncs?
 // TODO was 10%, adjust
 pub const ITEM_SPAWN_CHANCE_PERCENTAGE: usize = 33;

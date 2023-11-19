@@ -1,6 +1,6 @@
 use bevy::{ecs as bevy_ecs, prelude::Component, render::color::Color};
 
-use crate::types::Direction;
+use crate::types::{Direction, PlayerID};
 
 // Lobby
 
@@ -24,18 +24,19 @@ pub struct HUDRoot;
 pub struct GameTimerDisplay;
 
 #[derive(Component)]
-pub struct PenguinPortraitDisplay;
+pub struct PlayerPortraitDisplay;
 
 #[derive(Component)]
-pub struct PenguinPortrait(pub Penguin);
+pub struct PlayerPortrait(pub PlayerID);
 
 #[derive(Component)]
 pub struct LeaderboardUI;
 
 // In-game
 
-#[derive(Component, Clone, Copy, Default)]
+#[derive(Component, Clone, Copy, Hash)]
 pub struct Player {
+    pub id: PlayerID,
     pub can_push_bombs: bool,
 }
 
@@ -43,9 +44,6 @@ pub struct Player {
 pub struct Dead {
     pub cleanup_frame: usize,
 }
-
-#[derive(Component, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Penguin(pub usize);
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Position {
@@ -79,7 +77,7 @@ pub struct BombSatchel {
 
 #[derive(Component, Clone, Copy)]
 pub struct Bomb {
-    pub owner: Option<Penguin>,
+    pub owner: Option<PlayerID>,
     pub range: usize,
     pub expiration_frame: usize,
     pub moving: Option<Direction>,

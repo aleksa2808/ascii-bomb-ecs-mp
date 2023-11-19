@@ -115,13 +115,12 @@ pub fn run() {
         // .rollback_component_with_copy::<UIComponent>()
         // .rollback_component_with_copy::<HUDRoot>()
         // .rollback_component_with_copy::<GameTimerDisplay>()
-        // .rollback_component_with_copy::<PenguinPortraitDisplay>()
-        // .rollback_component_with_copy::<PenguinPortrait>()
+        // .rollback_component_with_copy::<PlayerPortraitDisplay>()
+        // .rollback_component_with_copy::<PlayerPortrait>()
         // .rollback_component_with_copy::<LeaderboardUI>()
         // game components
         .rollback_component_with_copy::<Player>()
         .rollback_component_with_copy::<Dead>()
-        .rollback_component_with_copy::<Penguin>()
         .rollback_component_with_copy::<Position>()
         .rollback_component_with_copy::<Bomb>()
         .rollback_component_with_copy::<Fuse>()
@@ -144,7 +143,7 @@ pub fn run() {
         // TODO not sure if this is necessary
         // .rollback_resource_with_copy::<TournamentComplete>()
         // TODO what if two items are switched, is their order also hashed?
-        .checksum_component_with_hash::<Penguin>()
+        .checksum_component_with_hash::<Player>()
         .checksum_component_with_hash::<Position>()
         .checksum_component_with_hash::<BombSatchel>()
         .checksum_component_with_hash::<Item>()

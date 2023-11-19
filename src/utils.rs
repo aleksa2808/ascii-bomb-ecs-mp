@@ -12,15 +12,14 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
 use crate::{
     components::{
-        BombSatchel, BurningItem, Destructible, GameTimerDisplay, HUDRoot, Item, Penguin,
-        PenguinPortrait, PenguinPortraitDisplay, Player, Position, Solid, UIComponent, UIRoot,
-        Wall,
+        BombSatchel, BurningItem, Destructible, GameTimerDisplay, HUDRoot, Item, Player,
+        PlayerPortrait, PlayerPortraitDisplay, Position, Solid, UIComponent, UIRoot, Wall,
     },
     constants::{
         COLORS, FPS, HUD_HEIGHT, PIXEL_SCALE, ROUND_DURATION_SECS, TILE_HEIGHT, TILE_WIDTH,
     },
     resources::{Fonts, GameEndFrame, GameTextures, HUDColors, MapSize, WorldType},
-    types::Direction,
+    types::{Direction, PlayerID},
 };
 
 pub fn get_x(x: isize) -> f32 {
@@ -46,7 +45,7 @@ fn init_hud(
     width: f32,
     world_type: WorldType,
     game_textures: &GameTextures,
-    penguin_tags: &[Penguin],
+    player_ids: &[PlayerID],
 ) {
     parent
         .spawn((
@@ -64,7 +63,7 @@ fn init_hud(
             },
             UIComponent,
             HUDRoot,
-            PenguinPortraitDisplay,
+            PlayerPortraitDisplay,
         ))
         .with_children(|parent| {
             // clock
@@ -110,13 +109,13 @@ fn init_hud(
                 });
 
             // player portraits
-            for penguin in penguin_tags {
+            for &player_id in player_ids {
                 parent
                     .spawn((
                         NodeBundle {
                             style: Style {
                                 position_type: PositionType::Absolute,
-                                left: Val::Px(((5 + 12 * penguin.0) * PIXEL_SCALE) as f32),
+                                left: Val::Px(((5 + 12 * player_id.0) * PIXEL_SCALE) as f32),
                                 top: Val::Px(PIXEL_SCALE as f32),
                                 width: Val::Px(8.0 * PIXEL_SCALE as f32),
                                 height: Val::Px(10.0 * PIXEL_SCALE as f32),
@@ -131,7 +130,7 @@ fn init_hud(
                             background_color: hud_colors.portrait_border_color.into(),
                             ..Default::default()
                         },
-                        PenguinPortrait(*penguin),
+                        PlayerPortrait(player_id),
                         UIComponent,
                     ))
                     .with_children(|parent| {
@@ -157,7 +156,7 @@ fn init_hud(
                                             ..Default::default()
                                         },
                                         image: game_textures
-                                            .get_penguin_texture(*penguin)
+                                            .get_player_texture(player_id)
                                             .clone()
                                             .into(),
                                         ..Default::default()
@@ -322,9 +321,9 @@ pub fn setup_round(
     number_of_players: usize,
     current_frame: usize,
 ) {
-    let penguin_tags = (0..number_of_players)
-        .map(Penguin)
-        .collect::<Vec<Penguin>>();
+    let player_ids = (0..number_of_players)
+        .map(PlayerID)
+        .collect::<Vec<PlayerID>>();
 
     // HUD generation //
     commands
@@ -349,7 +348,7 @@ pub fn setup_round(
                 (map_size.columns * TILE_WIDTH) as f32,
                 world_type,
                 game_textures,
-                &penguin_tags,
+                &player_ids,
             );
         });
 
@@ -373,9 +372,9 @@ pub fn setup_round(
             });
 
     let mut player_spawn_positions = vec![];
-    for penguin_tag in penguin_tags {
+    for player_id in player_ids {
         let player_spawn_position = possible_player_spawn_positions.next().unwrap();
-        let base_texture = game_textures.get_penguin_texture(penguin_tag).clone();
+        let base_texture = game_textures.get_player_texture(player_id).clone();
         commands
             .spawn((
                 SpriteBundle {
@@ -391,8 +390,10 @@ pub fn setup_round(
                     },
                     ..Default::default()
                 },
-                Player::default(),
-                penguin_tag,
+                Player {
+                    id: player_id,
+                    can_push_bombs: false,
+                },
                 player_spawn_position,
                 BombSatchel {
                     bombs_available: 1,
