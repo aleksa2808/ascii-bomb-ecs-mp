@@ -26,6 +26,13 @@ pub const HUD_HEIGHT: usize = 14 * PIXEL_SCALE;
 pub const TILE_HEIGHT: usize = 8 * PIXEL_SCALE;
 pub const TILE_WIDTH: usize = 6 * PIXEL_SCALE;
 
+pub const WALL_Z_LAYER: f32 = 60.0;
+pub const PLAYER_Z_LAYER: f32 = 50.0;
+pub const BOMB_Z_LAYER: f32 = 25.0;
+pub const ITEM_Z_LAYER: f32 = 20.0;
+pub const DESTRUCTIBLE_WALL_Z_LAYER: f32 = 10.0;
+pub const FIRE_Z_LAYER: f32 = 5.0;
+
 pub const FPS: usize = 60;
 
 pub const INPUT_UP: u8 = 1 << 0;
@@ -35,6 +42,12 @@ pub const INPUT_RIGHT: u8 = 1 << 3;
 pub const INPUT_ACTION: u8 = 1 << 4;
 
 pub const ROUND_DURATION_SECS: usize = 120;
+
+// these need to be adjusted based on FPS as they must not be lower than the max_predictions value
+// TODO can some static asserts be made?
+pub const GAME_START_FREEZE_FRAME_COUNT: usize = FPS / 2;
+pub const LEADERBOARD_DISPLAY_FRAME_COUNT: usize = 2 * FPS;
+pub const TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT: usize = 5 * FPS;
 
 pub const PLAYER_DEATH_FRAME_DELAY: usize = FPS / 2;
 

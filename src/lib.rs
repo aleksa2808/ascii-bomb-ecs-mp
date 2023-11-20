@@ -135,11 +135,11 @@ pub fn run() {
         // resources
         .rollback_resource_with_clone::<SessionRng>()
         .rollback_resource_with_copy::<FrameCount>()
+        .rollback_resource_with_copy::<WallOfDeath>()
         // TODO not sure if this is necessary
         // .rollback_resource_with_copy::<Leaderboard>()
-        .rollback_resource_with_copy::<RoundOutcome>()
         // .rollback_resource_with_copy::<GameEndFrame>()
-        .rollback_resource_with_copy::<FreezeEndFrame>()
+        .rollback_resource_with_copy::<GameFreeze>()
         // TODO not sure if this is necessary
         // .rollback_resource_with_copy::<TournamentComplete>()
         // TODO what if two items are switched, is their order also hashed?
@@ -156,8 +156,13 @@ pub fn run() {
                 (
                     increase_frame_system,
                     show_leaderboard,
+                    apply_deferred,
+                    show_tournament_winner,
+                    apply_deferred,
                     start_new_round,
-                    start_new_tournament,
+                    apply_deferred,
+                    finish_actionless_game_freeze,
+                    apply_deferred,
                     update_hud_clock,
                     update_player_portraits,
                     apply_deferred,
@@ -182,6 +187,8 @@ pub fn run() {
                     player_burn,
                     apply_deferred,
                     item_burn,
+                    apply_deferred,
+                    wall_of_death_update,
                     apply_deferred,
                     finish_round,
                     apply_deferred,

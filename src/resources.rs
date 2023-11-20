@@ -2,7 +2,11 @@ use bevy::{ecs as bevy_ecs, prelude::*, text::Font, utils::HashMap};
 use bevy_matchbox::matchbox_socket::PeerId;
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
-use crate::{constants::COLORS, types::PlayerID};
+use crate::{
+    components::Position,
+    constants::COLORS,
+    types::{Direction, PlayerID, PostFreezeAction},
+};
 
 #[derive(Resource)]
 pub struct Fonts {
@@ -188,28 +192,35 @@ pub struct RngSeeds {
 #[derive(Resource, Clone)]
 pub struct SessionRng(pub StdRng);
 
-#[derive(Resource, Clone, Copy)]
-pub struct FrameCount {
-    pub frame: usize,
-}
-
 #[derive(Resource)]
 pub struct Leaderboard {
     pub scores: HashMap<PlayerID, usize>,
     pub winning_score: usize,
 }
 
-#[derive(Resource, Clone, Copy, Hash)]
-pub enum RoundOutcome {
-    Tie,
-    Winner(PlayerID),
+#[derive(Resource, Clone, Copy)]
+pub struct FrameCount {
+    pub frame: usize,
+}
+
+#[derive(Resource, Clone, Copy)]
+pub enum WallOfDeath {
+    Dormant {
+        activation_frame: usize,
+    },
+    Active {
+        position: Position,
+        direction: Direction,
+        next_step_frame: usize,
+    },
+    Done,
 }
 
 #[derive(Resource)]
 pub struct GameEndFrame(pub usize);
 
 #[derive(Resource, Clone, Copy)]
-pub struct FreezeEndFrame(pub usize);
-
-#[derive(Resource)]
-pub struct TournamentComplete;
+pub struct GameFreeze {
+    pub end_frame: usize,
+    pub post_freeze_action: Option<PostFreezeAction>,
+}

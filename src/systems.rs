@@ -10,19 +10,21 @@ use bevy_matchbox::{
     MatchboxSocket,
 };
 use itertools::Itertools;
-use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
     components::*,
     constants::{
-        COLORS, FPS, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP,
-        ITEM_SPAWN_CHANCE_PERCENTAGE, PIXEL_SCALE, PLAYER_DEATH_FRAME_DELAY, TILE_HEIGHT,
-        TILE_WIDTH,
+        BOMB_Z_LAYER, COLORS, FIRE_Z_LAYER, FPS, GAME_START_FREEZE_FRAME_COUNT, HUD_HEIGHT,
+        INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE_PERCENTAGE,
+        LEADERBOARD_DISPLAY_FRAME_COUNT, PIXEL_SCALE, PLAYER_DEATH_FRAME_DELAY, TILE_HEIGHT,
+        TILE_WIDTH, TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT, WALL_Z_LAYER,
     },
     resources::*,
-    types::{Direction, PlayerID},
+    types::{Direction, PlayerID, PostFreezeAction, RoundOutcome},
     utils::{
-        format_hud_time, generate_item_at_position, get_x, get_y, setup_round, spawn_burning_item,
+        format_hud_time, generate_item_at_position, get_x, get_y, setup_leaderboard_display,
+        setup_round, spawn_burning_item,
     },
     AppState, GgrsConfig,
 };
@@ -212,9 +214,6 @@ pub fn log_ggrs_events(mut session: ResMut<Session<GgrsConfig>>) {
 pub fn setup_game(
     mut commands: Commands,
     mut session_rng: ResMut<SessionRng>,
-    game_textures: Res<GameTextures>,
-    fonts: Res<Fonts>,
-    hud_colors: Res<HUDColors>,
     mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
     matchbox_config: Res<MatchboxConfig>,
     frame_count: Res<FrameCount>,
@@ -252,17 +251,11 @@ pub fn setup_game(
     let world_type = WorldType::random(&mut session_rng.0);
     commands.insert_resource(world_type);
 
-    setup_round(
-        &mut session_rng.0,
-        commands,
-        map_size,
-        world_type,
-        &game_textures,
-        &fonts,
-        &hud_colors,
-        matchbox_config.number_of_players,
-        frame_count.frame,
-    );
+    // TODO this is kind of a hack
+    commands.insert_resource(GameFreeze {
+        end_frame: frame_count.frame, /* this frame */
+        post_freeze_action: Some(PostFreezeAction::StartNewRound),
+    })
 }
 
 pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
@@ -273,10 +266,9 @@ pub fn update_hud_clock(
     game_end_frame: Res<GameEndFrame>,
     mut query: Query<&mut Text, With<GameTimerDisplay>>,
     frame_count: Res<FrameCount>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -303,15 +295,13 @@ pub fn update_player_portraits(
 pub fn player_move(
     inputs: Res<PlayerInputs<GgrsConfig>>,
     mut p: ParamSet<(
-        Query<(&Player, &mut Position, &mut Transform, &mut Sprite)>,
+        Query<(&Player, &mut Position, &mut Transform, &mut Sprite), Without<Dead>>,
         Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
         Query<&mut Bomb>,
     )>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
-        // TODO convert into a run criteria
+    if game_freeze.is_some() {
         return;
     }
 
@@ -325,7 +315,7 @@ pub fn player_move(
 
     let mut bomb_move_vec = vec![];
     for (player, mut position, mut transform, mut sprite) in p.p0().iter_mut() {
-        let input = inputs[player.id.0].0.inp;
+        let input = inputs[player.id.0].0 .0;
         for (input_mask, moving_direction) in [
             (INPUT_UP, Direction::Up),
             (INPUT_DOWN, Direction::Down),
@@ -370,7 +360,12 @@ pub fn bomb_move(
         Query<(&mut Bomb, &mut Position, &mut Transform)>,
         Query<&Position, Or<(With<Solid>, With<Item>, With<Player>)>>,
     )>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
+    if game_freeze.is_some() {
+        return;
+    }
+
     let impassable_positions: HashSet<Position> = p.p1().iter().copied().collect();
 
     for (mut bomb, mut position, mut transform) in p.p0().iter_mut() {
@@ -393,13 +388,12 @@ pub fn bomb_move(
 pub fn pick_up_item(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
-    mut query: Query<(&mut Player, &Position, &mut BombSatchel)>,
+    mut query: Query<(&mut Player, &Position, &mut BombSatchel), Without<Dead>>,
     query2: Query<(Entity, &Item, &Position)>,
     frame_count: Res<FrameCount>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -450,18 +444,17 @@ pub fn bomb_drop(
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     world_type: Res<WorldType>,
-    mut query: Query<(&Player, &Position, &mut BombSatchel)>,
+    mut query: Query<(&Player, &Position, &mut BombSatchel), Without<Dead>>,
     query2: Query<&Position, Or<(With<Solid>, With<BurningItem>)>>,
     frame_count: Res<FrameCount>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
     for (player, position, mut bomb_satchel) in query.iter_mut() {
-        if inputs[player.id.0].0.inp & INPUT_ACTION != 0
+        if inputs[player.id.0].0 .0 & INPUT_ACTION != 0
             && bomb_satchel.bombs_available > 0
             && !query2.iter().any(|p| *p == *position)
         {
@@ -472,7 +465,11 @@ pub fn bomb_drop(
                 .spawn((
                     SpriteBundle {
                         texture: game_textures.bomb.clone(),
-                        transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 25.0),
+                        transform: Transform::from_xyz(
+                            get_x(position.x),
+                            get_y(position.y),
+                            BOMB_Z_LAYER,
+                        ),
                         sprite: Sprite {
                             custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
                             ..Default::default()
@@ -541,10 +538,9 @@ pub fn animate_fuse(
     fonts: Res<Fonts>,
     query: Query<&Bomb>,
     mut query2: Query<(&Parent, &mut Text, &Fuse, &mut Transform)>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -635,10 +631,9 @@ pub fn fire_tick(
     mut commands: Commands,
     frame_count: Res<FrameCount>,
     query: Query<(Entity, &Fire)>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -655,10 +650,9 @@ pub fn crumbling_tick(
     frame_count: Res<FrameCount>,
     query: Query<(Entity, &Crumbling, &Position)>,
     game_textures: Res<GameTextures>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -681,10 +675,9 @@ pub fn burning_item_tick(
     mut commands: Commands,
     frame_count: Res<FrameCount>,
     query: Query<(Entity, &BurningItem)>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -705,17 +698,16 @@ pub fn explode_bombs(
         Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
         Query<(&mut Bomb, &Position)>,
     )>,
-    mut query3: Query<(&Player, &mut BombSatchel)>,
+    mut query3: Query<(&Player, &mut BombSatchel), Without<Dead>>,
     mut query: Query<
         (Entity, &Position, &mut Handle<Image>, Option<&Crumbling>),
         (With<Wall>, With<Destructible>),
     >,
     query2: Query<(Entity, &Position), With<Fire>>,
     frame_count: Res<FrameCount>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -743,10 +735,8 @@ pub fn explode_bombs(
         commands.entity(entity).despawn_recursive();
 
         if let Some(owner) = bomb.owner {
-            if let Some(mut bomb_satchel) = query3
-                .iter_mut()
-                .find(|(player, _)| player.id == owner)
-                .map(|(_, bomb_satchel)| bomb_satchel)
+            if let Some((_, mut bomb_satchel)) =
+                query3.iter_mut().find(|(player, _)| player.id == owner)
             {
                 bomb_satchel.bombs_available += 1;
             }
@@ -762,7 +752,11 @@ pub fn explode_bombs(
                 .spawn((
                     SpriteBundle {
                         texture: game_textures.fire.clone(),
-                        transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 5.0),
+                        transform: Transform::from_xyz(
+                            get_x(position.x),
+                            get_y(position.y),
+                            FIRE_Z_LAYER,
+                        ),
                         sprite: Sprite {
                             custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
                             ..Default::default()
@@ -820,13 +814,12 @@ pub fn explode_bombs(
 
 pub fn player_burn(
     mut commands: Commands,
-    query: Query<(Entity, &Player, &Position)>,
+    query: Query<(Entity, &Player, &Position), Without<Dead>>,
     query2: Query<&Position, With<Fire>>,
     frame_count: Res<FrameCount>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -834,8 +827,7 @@ pub fn player_burn(
 
     for (entity, player, position) in query.iter() {
         if fire_positions.contains(position) {
-            println!("Player {} burned at position {position:?}!", player.id.0);
-            commands.entity(entity).remove::<Player>();
+            println!("Player burned: {}, position: {position:?}", player.id.0);
             commands.entity(entity).insert(Dead {
                 cleanup_frame: frame_count.frame + PLAYER_DEATH_FRAME_DELAY,
             });
@@ -849,10 +841,9 @@ pub fn item_burn(
     query: Query<(Entity, &Position), With<Item>>,
     query2: Query<&Position, With<Fire>>,
     frame_count: Res<FrameCount>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -864,32 +855,193 @@ pub fn item_burn(
     }
 }
 
-pub fn finish_round(
+pub fn wall_of_death_update(
     mut commands: Commands,
-    query: Query<&Player>,
+    game_textures: Res<GameTextures>,
+    mut wall_of_death: ResMut<WallOfDeath>,
+    world_type: Res<WorldType>,
+    map_size: Res<MapSize>,
+    query: Query<&Position, (With<Wall>, Without<Destructible>)>,
+    query2: Query<(Entity, &Position, Option<&Bomb>)>,
+    mut query3: Query<(&Player, &mut BombSatchel, Option<&Dead>)>,
     frame_count: Res<FrameCount>,
-    game_end_frame: Res<GameEndFrame>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
-    let mut round_over = false;
-    if frame_count.frame >= game_end_frame.0 || query.iter().count() == 0 {
-        commands.insert_resource(RoundOutcome::Tie);
+    let get_next_position_direction = |mut position: Position,
+                                       mut direction: Direction|
+     -> Option<(Position, Direction)> {
+        let end_position = Position {
+            y: map_size.rows as isize - 3,
+            x: 3,
+        };
 
-        round_over = true;
-    } else if let Ok(player) = query.get_single() {
-        commands.insert_resource(RoundOutcome::Winner(player.id));
+        let walls: HashSet<Position> = query.iter().copied().collect();
+        loop {
+            if position == end_position {
+                break None;
+            }
 
-        round_over = true;
+            match position {
+                Position { y: 1, x: 1 } | Position { y: 2, x: 2 } => {
+                    direction = Direction::Right;
+                }
+                Position { y: 1, x } if x == map_size.columns as isize - 2 => {
+                    direction = Direction::Down;
+                }
+                Position { y, x }
+                    if y == map_size.rows as isize - 2 && x == map_size.columns as isize - 2 =>
+                {
+                    direction = Direction::Left;
+                }
+                Position { y, x: 2 } if y == map_size.rows as isize - 2 => {
+                    direction = Direction::Up;
+                }
+                Position { y: 2, x } if x == map_size.columns as isize - 3 => {
+                    direction = Direction::Down;
+                }
+                Position { y, x }
+                    if y == map_size.rows as isize - 3 && x == map_size.columns as isize - 3 =>
+                {
+                    direction = Direction::Left;
+                }
+                _ => (),
+            }
+
+            position = position.offset(direction, 1);
+            if !walls.contains(&position) {
+                break Some((position, direction));
+            }
+        }
+    };
+
+    let mut clear_position_and_spawn_wall = |position: Position| {
+        for (entity, position, bomb) in query2.iter().filter(|(_, &p, _)| p == position) {
+            if let Ok((player, _, dead)) = query3.get(entity) {
+                if dead.is_none() {
+                    println!("Player crushed: {}, position: {position:?}", player.id.0);
+                    commands.entity(entity).insert(Dead {
+                        cleanup_frame: frame_count.frame + PLAYER_DEATH_FRAME_DELAY,
+                    });
+                }
+            } else {
+                commands.entity(entity).despawn_recursive();
+            }
+
+            if let Some(bomb) = bomb {
+                if let Some(owner) = bomb.owner {
+                    if let Some((_, mut bomb_satchel, _)) = query3
+                        .iter_mut()
+                        .filter(|(_, _, dead)| dead.is_none())
+                        .find(|(&player, _, _)| player.id == owner)
+                    {
+                        bomb_satchel.bombs_available += 1;
+                    }
+                }
+            }
+        }
+
+        commands
+            .spawn((
+                SpriteBundle {
+                    texture: game_textures.get_map_textures(*world_type).wall.clone(),
+                    transform: Transform::from_xyz(
+                        get_x(position.x),
+                        get_y(position.y),
+                        WALL_Z_LAYER,
+                    ),
+                    sprite: Sprite {
+                        custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                Wall,
+                Solid,
+                position,
+            ))
+            .add_rollback();
+    };
+
+    loop {
+        let new_state = match *wall_of_death {
+            WallOfDeath::Dormant { activation_frame } => {
+                if frame_count.frame >= activation_frame {
+                    println!("Wall of Death activated!");
+
+                    Some(WallOfDeath::Active {
+                        position: Position {
+                            y: map_size.rows as isize - 1,
+                            x: 1,
+                        },
+                        direction: Direction::Up,
+                        next_step_frame: frame_count.frame,
+                    })
+                } else {
+                    None
+                }
+            }
+            WallOfDeath::Active {
+                ref mut position,
+                ref mut direction,
+                ref mut next_step_frame,
+            } => {
+                if frame_count.frame >= *next_step_frame {
+                    if let Some((next_position, next_direction)) =
+                        get_next_position_direction(*position, *direction)
+                    {
+                        *position = next_position;
+                        *direction = next_direction;
+                        *next_step_frame += FPS / 5;
+
+                        clear_position_and_spawn_wall(*position);
+
+                        None
+                    } else {
+                        Some(WallOfDeath::Done)
+                    }
+                } else {
+                    None
+                }
+            }
+            WallOfDeath::Done => None,
+        };
+
+        if let Some(new_state) = new_state {
+            *wall_of_death = new_state;
+        } else {
+            break;
+        }
+    }
+}
+
+pub fn finish_round(
+    mut commands: Commands,
+    query: Query<&Player, Without<Dead>>,
+    frame_count: Res<FrameCount>,
+    game_end_frame: Res<GameEndFrame>,
+    game_freeze: Option<Res<GameFreeze>>,
+) {
+    if game_freeze.is_some() {
+        return;
     }
 
-    if round_over {
-        println!("Round over, freezing...");
-        commands.insert_resource(FreezeEndFrame(frame_count.frame + FPS /* 1 second */));
+    let round_outcome = if frame_count.frame >= game_end_frame.0 || query.iter().count() == 0 {
+        Some(RoundOutcome::Tie)
+    } else if let Ok(player) = query.get_single() {
+        Some(RoundOutcome::Winner(player.id))
+    } else {
+        None
+    };
+
+    if let Some(round_outcome) = round_outcome {
+        commands.insert_resource(GameFreeze {
+            end_frame: frame_count.frame + FPS, /* 1 second */
+            post_freeze_action: Some(PostFreezeAction::ShowLeaderboard(round_outcome)),
+        });
     }
 }
 
@@ -897,10 +1049,9 @@ pub fn cleanup_dead(
     mut commands: Commands,
     query: Query<(Entity, &Dead)>,
     frame_count: Res<FrameCount>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if freeze_end_frame.is_some() {
-        // The current round is over.
+    if game_freeze.is_some() {
         return;
     }
 
@@ -912,210 +1063,104 @@ pub fn cleanup_dead(
 }
 
 pub fn show_leaderboard(
+    mut session_rng: ResMut<SessionRng>,
     mut commands: Commands,
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     mut leaderboard: ResMut<Leaderboard>,
-    round_outcome: Option<Res<RoundOutcome>>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
+    game_freeze: Option<ResMut<GameFreeze>>,
     primary_query: Query<&Window, With<PrimaryWindow>>,
     query: Query<Entity, With<UIRoot>>,
     frame_count: Res<FrameCount>,
 ) {
-    if let (Some(mut freeze_end_frame), Some(round_outcome)) =
-        (freeze_end_frame, round_outcome.as_deref())
+    if let Some(GameFreeze {
+        end_frame: freeze_end_frame,
+        post_freeze_action: Some(PostFreezeAction::ShowLeaderboard(round_outcome)),
+    }) = game_freeze.as_deref()
     {
-        if frame_count.frame >= freeze_end_frame.0 {
-            match round_outcome {
+        if frame_count.frame >= *freeze_end_frame {
+            let next_action = match round_outcome {
                 RoundOutcome::Winner(player_id) => {
-                    println!("Winner: {:?}", player_id.0);
-                    *leaderboard.scores.get_mut(player_id).unwrap() += 1;
+                    println!("Round winner: {:?}", player_id.0);
+                    let player_score = leaderboard.scores.get_mut(player_id).unwrap();
+                    *player_score += 1;
+
+                    if *player_score >= leaderboard.winning_score {
+                        PostFreezeAction::ShowTournamentWinner { winner: *player_id }
+                    } else {
+                        PostFreezeAction::StartNewRound
+                    }
                 }
-                RoundOutcome::Tie => println!("Tie!"),
-            }
-
-            commands.remove_resource::<RoundOutcome>();
-            freeze_end_frame.0 = frame_count.frame + 2 * FPS;
-
-            // setup leaderboard display
-            let window = primary_query.get_single().unwrap();
+                RoundOutcome::Tie => {
+                    println!("Tie!");
+                    PostFreezeAction::StartNewRound
+                }
+            };
 
             commands.entity(query.single()).with_children(|parent| {
-                parent
-                    .spawn((
-                        NodeBundle {
-                            style: Style {
-                                position_type: PositionType::Absolute,
-                                left: Val::Px(0.0),
-                                top: Val::Px(0.0),
-                                width: Val::Px(window.width()),
-                                height: Val::Px(window.height()),
-                                ..Default::default()
-                            },
-                            background_color: COLORS[0].into(),
-                            ..Default::default()
-                        },
-                        UIComponent,
-                        LeaderboardUI,
-                    ))
-                    .with_children(|parent| {
-                        // spawn border
-                        let mut spawn_color = |y: usize, x: usize| {
-                            parent.spawn((
-                                NodeBundle {
-                                    style: Style {
-                                        position_type: PositionType::Absolute,
-                                        left: Val::Px((x * PIXEL_SCALE) as f32),
-                                        top: Val::Px((y * PIXEL_SCALE) as f32),
-                                        width: Val::Px(PIXEL_SCALE as f32),
-                                        height: Val::Px(PIXEL_SCALE as f32),
-                                        ..Default::default()
-                                    },
-                                    background_color: (*COLORS
-                                        .iter()
-                                        .choose(&mut rand::thread_rng())
-                                        .unwrap())
-                                    .into(),
-                                    ..Default::default()
-                                },
-                                UIComponent,
-                            ));
-                        };
+                let window = primary_query.get_single().unwrap();
 
-                        let height = window.height() as usize / PIXEL_SCALE;
-                        let width = window.width() as usize / PIXEL_SCALE;
-                        for y in 0..height {
-                            spawn_color(y, 0);
-                            spawn_color(y, 1);
-                            spawn_color(y, width - 2);
-                            spawn_color(y, width - 1);
-                        }
-                        for x in 2..width - 2 {
-                            spawn_color(0, x);
-                            spawn_color(1, x);
-                            spawn_color(height - 2, x);
-                            spawn_color(height - 1, x);
-                        }
+                setup_leaderboard_display(
+                    &mut session_rng.0,
+                    parent,
+                    window.height(),
+                    window.width(),
+                    &game_textures,
+                    &fonts,
+                    &leaderboard,
+                    *round_outcome,
+                );
+            });
 
-                        for (&player_id, &score) in &leaderboard.scores {
-                            // spawn player portrait
-                            parent
-                                .spawn((
-                                    NodeBundle {
-                                        style: Style {
-                                            position_type: PositionType::Absolute,
-                                            left: Val::Px(4.0 * PIXEL_SCALE as f32),
-                                            top: Val::Px(
-                                                ((6 + player_id.0 * 12) * PIXEL_SCALE) as f32,
-                                            ),
-                                            width: Val::Px(TILE_WIDTH as f32),
-                                            height: Val::Px(TILE_HEIGHT as f32),
-                                            ..Default::default()
-                                        },
-                                        background_color: COLORS[2].into(),
-                                        ..Default::default()
-                                    },
-                                    UIComponent,
-                                ))
-                                .with_children(|parent| {
-                                    parent.spawn((
-                                        ImageBundle {
-                                            style: Style {
-                                                width: Val::Percent(100.0),
-                                                height: Val::Percent(100.0),
-                                                ..Default::default()
-                                            },
-                                            image: game_textures
-                                                .get_player_texture(player_id)
-                                                .clone()
-                                                .into(),
-                                            ..Default::default()
-                                        },
-                                        UIComponent,
-                                    ));
-                                });
-
-                            // spawn player trophies
-                            for i in 0..score {
-                                parent.spawn((
-                                    ImageBundle {
-                                        style: Style {
-                                            position_type: PositionType::Absolute,
-                                            top: Val::Px(
-                                                ((7 + player_id.0 * 12) * PIXEL_SCALE) as f32,
-                                            ),
-                                            left: Val::Px(((15 + i * 9) * PIXEL_SCALE) as f32),
-                                            width: Val::Px(5.0 * PIXEL_SCALE as f32),
-                                            height: Val::Px(7.0 * PIXEL_SCALE as f32),
-                                            ..Default::default()
-                                        },
-                                        image: game_textures.trophy.clone().into(),
-                                        ..Default::default()
-                                    },
-                                    UIComponent,
-                                ));
-                            }
-
-                            if let RoundOutcome::Winner(round_winner_player_id) = *round_outcome {
-                                if player_id == round_winner_player_id {
-                                    let mut place_text = |y, x, str: &str, c: usize| {
-                                        parent.spawn((
-                                            TextBundle {
-                                                text: Text::from_section(
-                                                    str.to_string(),
-                                                    TextStyle {
-                                                        font: fonts.mono.clone(),
-                                                        font_size: 2.0 * PIXEL_SCALE as f32,
-                                                        color: COLORS[c].into(),
-                                                    },
-                                                ),
-                                                style: Style {
-                                                    position_type: PositionType::Absolute,
-                                                    top: Val::Px(y as f32 * PIXEL_SCALE as f32),
-                                                    left: Val::Px(x as f32 * PIXEL_SCALE as f32),
-                                                    ..Default::default()
-                                                },
-                                                ..Default::default()
-                                            },
-                                            UIComponent,
-                                        ));
-                                    };
-
-                                    place_text(
-                                        6 + player_id.0 * 12,
-                                        15 + (score - 1) * 9 - 2,
-                                        "*",
-                                        15,
-                                    );
-                                    place_text(
-                                        8 + player_id.0 * 12,
-                                        15 + (score - 1) * 9 + 6,
-                                        "*",
-                                        15,
-                                    );
-                                    place_text(
-                                        10 + player_id.0 * 12,
-                                        15 + (score - 1) * 9 - 1,
-                                        "*",
-                                        15,
-                                    );
-                                }
-                            }
-                        }
-                    });
+            commands.insert_resource(GameFreeze {
+                end_frame: frame_count.frame + LEADERBOARD_DISPLAY_FRAME_COUNT,
+                post_freeze_action: Some(next_action),
             });
         }
     }
 }
 
-pub fn start_new_round(
-    mut commands: Commands,
+pub fn show_tournament_winner(
     mut session_rng: ResMut<SessionRng>,
-    freeze_end_frame: Option<ResMut<FreezeEndFrame>>,
-    round_outcome: Option<Res<RoundOutcome>>,
-    tournament_complete: Option<Res<TournamentComplete>>,
+    mut commands: Commands,
+    game_freeze: Option<Res<GameFreeze>>,
     frame_count: Res<FrameCount>,
-    leaderboard: Res<Leaderboard>,
+    mut leaderboard: ResMut<Leaderboard>,
+    mut world_type: ResMut<WorldType>,
+) {
+    if let Some(GameFreeze {
+        end_frame: game_end_frame,
+        post_freeze_action: Some(PostFreezeAction::ShowTournamentWinner { winner }),
+    }) = game_freeze.as_deref()
+    {
+        if frame_count.frame >= *game_end_frame {
+            println!("Player {} WINNER WINNER CHICKEN DINNER", winner.0);
+
+            // TODO show winner
+
+            // setup new tournament //
+
+            // reset the leaderboard
+            for (_, score) in &mut leaderboard.scores {
+                *score = 0;
+            }
+
+            // choose a world for the next tournament
+            *world_type = world_type.next_random(&mut session_rng.0);
+
+            commands.insert_resource(GameFreeze {
+                end_frame: frame_count.frame + TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT,
+                post_freeze_action: Some(PostFreezeAction::StartNewRound),
+            })
+        }
+    }
+}
+
+pub fn start_new_round(
+    mut session_rng: ResMut<SessionRng>,
+    mut commands: Commands,
+    game_freeze: Option<Res<GameFreeze>>,
+    frame_count: Res<FrameCount>,
     query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
     map_size: Res<MapSize>,
     world_type: Res<WorldType>,
@@ -1124,88 +1169,50 @@ pub fn start_new_round(
     fonts: Res<Fonts>,
     hud_colors: Res<HUDColors>,
 ) {
-    if let (Some(mut freeze_end_frame), None, None) =
-        (freeze_end_frame, round_outcome, tournament_complete)
+    if let Some(GameFreeze {
+        end_frame: freeze_end_frame,
+        post_freeze_action: Some(PostFreezeAction::StartNewRound),
+    }) = game_freeze.as_deref()
     {
-        if frame_count.frame >= freeze_end_frame.0 {
-            if let Some((p, _)) = leaderboard
-                .scores
-                .iter()
-                .find(|(_, u)| **u >= leaderboard.winning_score)
-            {
-                println!("Player {} WINNER WINNER CHICKEN DINNER", p.0);
-                freeze_end_frame.0 = frame_count.frame + 5 * FPS;
-                commands.insert_resource(TournamentComplete);
-
-                // TODO show winner
-            } else {
-                commands.remove_resource::<FreezeEndFrame>();
-
-                for e in query.iter() {
-                    // TODO should everything be rollbackable now?
-                    commands.entity(e).despawn();
-                }
-
-                setup_round(
-                    &mut session_rng.0,
-                    commands,
-                    *map_size,
-                    *world_type,
-                    &game_textures,
-                    &fonts,
-                    &hud_colors,
-                    matchbox_config.number_of_players,
-                    frame_count.frame,
-                )
-            }
-        }
-    }
-}
-
-pub fn start_new_tournament(
-    mut commands: Commands,
-    mut session_rng: ResMut<SessionRng>,
-    freeze_end_frame: Option<Res<FreezeEndFrame>>,
-    tournament_complete: Option<Res<TournamentComplete>>,
-    frame_count: Res<FrameCount>,
-    mut leaderboard: ResMut<Leaderboard>,
-    query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
-    map_size: Res<MapSize>,
-    mut world_type: ResMut<WorldType>,
-    matchbox_config: Res<MatchboxConfig>,
-    game_textures: ResMut<GameTextures>,
-    fonts: Res<Fonts>,
-    hud_colors: Res<HUDColors>,
-) {
-    if let (Some(freeze_end_frame), Some(_)) = (freeze_end_frame, tournament_complete) {
-        if frame_count.frame >= freeze_end_frame.0 {
+        if frame_count.frame >= *freeze_end_frame {
             // clear game state
             for e in query.iter() {
                 // TODO should everything be rollbackable now?
                 commands.entity(e).despawn();
             }
-            commands.remove_resource::<FreezeEndFrame>();
-            commands.remove_resource::<TournamentComplete>();
 
-            // reset the leaderboard
-            for (_, score) in &mut leaderboard.scores {
-                *score = 0;
-            }
-
-            // change the tournament world
-            *world_type = world_type.next_random(&mut session_rng.0);
-
+            let round_start_frame = frame_count.frame + GAME_START_FREEZE_FRAME_COUNT;
             setup_round(
                 &mut session_rng.0,
-                commands,
+                &mut commands,
                 *map_size,
                 *world_type,
                 &game_textures,
                 &fonts,
                 &hud_colors,
                 matchbox_config.number_of_players,
-                frame_count.frame,
-            )
+                round_start_frame,
+            );
+            commands.insert_resource(GameFreeze {
+                end_frame: round_start_frame,
+                post_freeze_action: None,
+            })
+        }
+    }
+}
+
+pub fn finish_actionless_game_freeze(
+    mut commands: Commands,
+    game_freeze: Option<Res<GameFreeze>>,
+    frame_count: Res<FrameCount>,
+) {
+    if let Some(GameFreeze {
+        end_frame: freeze_end_frame,
+        post_freeze_action: None,
+    }) = game_freeze.as_deref()
+    {
+        if frame_count.frame >= *freeze_end_frame {
+            commands.remove_resource::<GameFreeze>();
         }
     }
 }

@@ -5,9 +5,7 @@ use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, Eq, Pod, Zeroable)]
-pub struct PlayerInput {
-    pub inp: u8,
-}
+pub struct PlayerInput(pub u8);
 
 #[derive(Debug)]
 pub struct GgrsConfig;
@@ -46,4 +44,17 @@ pub enum Direction {
 
 impl Direction {
     pub const LIST: [Self; 4] = [Self::Right, Self::Left, Self::Up, Self::Down];
+}
+
+#[derive(Clone, Copy, Hash)]
+pub enum RoundOutcome {
+    Tie,
+    Winner(PlayerID),
+}
+
+#[derive(Clone, Copy)]
+pub enum PostFreezeAction {
+    ShowLeaderboard(RoundOutcome),
+    ShowTournamentWinner { winner: PlayerID },
+    StartNewRound,
 }

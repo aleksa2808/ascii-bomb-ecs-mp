@@ -12,14 +12,17 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
 use crate::{
     components::{
-        BombSatchel, BurningItem, Destructible, GameTimerDisplay, HUDRoot, Item, Player,
-        PlayerPortrait, PlayerPortraitDisplay, Position, Solid, UIComponent, UIRoot, Wall,
+        BombSatchel, BurningItem, Destructible, GameTimerDisplay, HUDRoot, Item, LeaderboardUI,
+        Player, PlayerPortrait, PlayerPortraitDisplay, Position, Solid, UIComponent, UIRoot, Wall,
     },
     constants::{
-        COLORS, FPS, HUD_HEIGHT, PIXEL_SCALE, ROUND_DURATION_SECS, TILE_HEIGHT, TILE_WIDTH,
+        COLORS, DESTRUCTIBLE_WALL_Z_LAYER, FPS, HUD_HEIGHT, ITEM_Z_LAYER, PIXEL_SCALE,
+        PLAYER_Z_LAYER, ROUND_DURATION_SECS, TILE_HEIGHT, TILE_WIDTH, WALL_Z_LAYER,
     },
-    resources::{Fonts, GameEndFrame, GameTextures, HUDColors, MapSize, WorldType},
-    types::{Direction, PlayerID},
+    resources::{
+        Fonts, GameEndFrame, GameTextures, HUDColors, Leaderboard, MapSize, WallOfDeath, WorldType,
+    },
+    types::{Direction, PlayerID, RoundOutcome},
 };
 
 pub fn get_x(x: isize) -> f32 {
@@ -232,7 +235,7 @@ fn spawn_map(
         commands.spawn((
             SpriteBundle {
                 texture: game_textures.get_map_textures(world_type).wall.clone(),
-                transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 10.0),
+                transform: Transform::from_xyz(get_x(position.x), get_y(position.y), WALL_Z_LAYER),
                 sprite: Sprite {
                     custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
                     ..Default::default()
@@ -294,7 +297,11 @@ fn spawn_map(
                         .get_map_textures(world_type)
                         .destructible_wall
                         .clone(),
-                    transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 10.0),
+                    transform: Transform::from_xyz(
+                        get_x(position.x),
+                        get_y(position.y),
+                        DESTRUCTIBLE_WALL_Z_LAYER,
+                    ),
                     sprite: Sprite {
                         custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
                         ..Default::default()
@@ -312,14 +319,14 @@ fn spawn_map(
 
 pub fn setup_round(
     rng: &mut StdRng,
-    mut commands: Commands,
+    commands: &mut Commands,
     map_size: MapSize,
     world_type: WorldType,
     game_textures: &GameTextures,
     fonts: &Fonts,
     hud_colors: &HUDColors,
     number_of_players: usize,
-    current_frame: usize,
+    round_start_frame: usize,
 ) {
     let player_ids = (0..number_of_players)
         .map(PlayerID)
@@ -382,7 +389,7 @@ pub fn setup_round(
                     transform: Transform::from_xyz(
                         get_x(player_spawn_position.x),
                         get_y(player_spawn_position.y),
-                        50.0,
+                        PLAYER_Z_LAYER,
                     ),
                     sprite: Sprite {
                         custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
@@ -407,14 +414,17 @@ pub fn setup_round(
 
     spawn_map(
         rng,
-        &mut commands,
+        commands,
         game_textures,
         world_type,
         map_size,
         &player_spawn_positions,
     );
 
-    commands.insert_resource(GameEndFrame(current_frame + ROUND_DURATION_SECS * FPS));
+    commands.insert_resource(GameEndFrame(round_start_frame + ROUND_DURATION_SECS * FPS));
+    commands.insert_resource(WallOfDeath::Dormant {
+        activation_frame: round_start_frame + ROUND_DURATION_SECS / 2 * FPS,
+    });
 }
 
 pub fn generate_item_at_position(
@@ -441,7 +451,7 @@ pub fn generate_item_at_position(
                     Item::RangeUp => game_textures.range_up.clone(),
                     Item::BombPush => game_textures.bomb_push.clone(),
                 },
-                transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 20.0),
+                transform: Transform::from_xyz(get_x(position.x), get_y(position.y), ITEM_Z_LAYER),
                 sprite: Sprite {
                     custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
                     ..Default::default()
@@ -463,7 +473,7 @@ pub fn spawn_burning_item(
     commands.spawn((
         SpriteBundle {
             texture: game_textures.burning_item.clone(),
-            transform: Transform::from_xyz(get_x(position.x), get_y(position.y), 20.0),
+            transform: Transform::from_xyz(get_x(position.x), get_y(position.y), ITEM_Z_LAYER),
             sprite: Sprite {
                 custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
                 ..Default::default()
@@ -475,4 +485,152 @@ pub fn spawn_burning_item(
             expiration_frame: current_frame + FPS / 2,
         },
     ));
+}
+
+pub fn setup_leaderboard_display(
+    rng: &mut StdRng,
+    parent: &mut ChildBuilder,
+    window_height: f32,
+    window_width: f32,
+    game_textures: &GameTextures,
+    fonts: &Fonts,
+    leaderboard: &Leaderboard,
+    round_outcome: RoundOutcome,
+) {
+    parent
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    top: Val::Px(0.0),
+                    height: Val::Px(window_height),
+                    width: Val::Px(window_width),
+                    ..Default::default()
+                },
+                background_color: COLORS[0].into(),
+                ..Default::default()
+            },
+            UIComponent,
+            LeaderboardUI,
+        ))
+        .with_children(|parent| {
+            // spawn border
+            let mut spawn_color = |y: usize, x: usize| {
+                parent.spawn((
+                    NodeBundle {
+                        style: Style {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px((x * PIXEL_SCALE) as f32),
+                            top: Val::Px((y * PIXEL_SCALE) as f32),
+                            width: Val::Px(PIXEL_SCALE as f32),
+                            height: Val::Px(PIXEL_SCALE as f32),
+                            ..Default::default()
+                        },
+                        background_color: (*COLORS.iter().choose(rng).unwrap()).into(),
+                        ..Default::default()
+                    },
+                    UIComponent,
+                ));
+            };
+
+            let height = window_height as usize / PIXEL_SCALE;
+            let width = window_width as usize / PIXEL_SCALE;
+            for y in 0..height {
+                spawn_color(y, 0);
+                spawn_color(y, 1);
+                spawn_color(y, width - 2);
+                spawn_color(y, width - 1);
+            }
+            for x in 2..width - 2 {
+                spawn_color(0, x);
+                spawn_color(1, x);
+                spawn_color(height - 2, x);
+                spawn_color(height - 1, x);
+            }
+
+            for (&player_id, &score) in &leaderboard.scores {
+                // spawn player portrait
+                parent
+                    .spawn((
+                        NodeBundle {
+                            style: Style {
+                                position_type: PositionType::Absolute,
+                                left: Val::Px(4.0 * PIXEL_SCALE as f32),
+                                top: Val::Px(((6 + player_id.0 * 12) * PIXEL_SCALE) as f32),
+                                width: Val::Px(TILE_WIDTH as f32),
+                                height: Val::Px(TILE_HEIGHT as f32),
+                                ..Default::default()
+                            },
+                            background_color: COLORS[2].into(),
+                            ..Default::default()
+                        },
+                        UIComponent,
+                    ))
+                    .with_children(|parent| {
+                        parent.spawn((
+                            ImageBundle {
+                                style: Style {
+                                    width: Val::Percent(100.0),
+                                    height: Val::Percent(100.0),
+                                    ..Default::default()
+                                },
+                                image: game_textures.get_player_texture(player_id).clone().into(),
+                                ..Default::default()
+                            },
+                            UIComponent,
+                        ));
+                    });
+
+                // spawn player trophies
+                for i in 0..score {
+                    parent.spawn((
+                        ImageBundle {
+                            style: Style {
+                                position_type: PositionType::Absolute,
+                                top: Val::Px(((7 + player_id.0 * 12) * PIXEL_SCALE) as f32),
+                                left: Val::Px(((15 + i * 9) * PIXEL_SCALE) as f32),
+                                width: Val::Px(5.0 * PIXEL_SCALE as f32),
+                                height: Val::Px(7.0 * PIXEL_SCALE as f32),
+                                ..Default::default()
+                            },
+                            image: game_textures.trophy.clone().into(),
+                            ..Default::default()
+                        },
+                        UIComponent,
+                    ));
+                }
+
+                if let RoundOutcome::Winner(round_winner_player_id) = round_outcome {
+                    if player_id == round_winner_player_id {
+                        let mut place_text = |y, x, str: &str, c: usize| {
+                            parent.spawn((
+                                TextBundle {
+                                    text: Text::from_section(
+                                        str.to_string(),
+                                        TextStyle {
+                                            font: fonts.mono.clone(),
+                                            font_size: 2.0 * PIXEL_SCALE as f32,
+                                            color: COLORS[c].into(),
+                                        },
+                                    ),
+                                    style: Style {
+                                        position_type: PositionType::Absolute,
+                                        top: Val::Px(y as f32 * PIXEL_SCALE as f32),
+                                        left: Val::Px(x as f32 * PIXEL_SCALE as f32),
+                                        ..Default::default()
+                                    },
+                                    ..Default::default()
+                                },
+                                UIComponent,
+                            ));
+                        };
+
+                        place_text(6 + player_id.0 * 12, 15 + (score - 1) * 9 - 2, "*", 15);
+                        place_text(8 + player_id.0 * 12, 15 + (score - 1) * 9 + 6, "*", 15);
+                        place_text(10 + player_id.0 * 12, 15 + (score - 1) * 9 - 1, "*", 15);
+                    }
+                }
+            }
+        });
 }
