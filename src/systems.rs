@@ -15,16 +15,17 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 use crate::{
     components::*,
     constants::{
-        BOMB_Z_LAYER, COLORS, FIRE_Z_LAYER, FPS, GAME_START_FREEZE_FRAME_COUNT, HUD_HEIGHT,
-        INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE_PERCENTAGE,
-        LEADERBOARD_DISPLAY_FRAME_COUNT, PIXEL_SCALE, PLAYER_DEATH_FRAME_DELAY, TILE_HEIGHT,
+        BOMB_SHORTENED_FUSE_FRAME_COUNT, BOMB_Z_LAYER, COLORS, FIRE_Z_LAYER, FPS,
+        GAME_START_FREEZE_FRAME_COUNT, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN, INPUT_LEFT,
+        INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE_PERCENTAGE, LEADERBOARD_DISPLAY_FRAME_COUNT,
+        MOVING_OBJECT_FRAME_INTERVAL, PIXEL_SCALE, PLAYER_DEATH_FRAME_DELAY, TILE_HEIGHT,
         TILE_WIDTH, TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT, WALL_Z_LAYER,
     },
     resources::*,
     types::{Direction, PlayerID, PostFreezeAction, RoundOutcome},
     utils::{
-        format_hud_time, generate_item_at_position, get_x, get_y, setup_leaderboard_display,
-        setup_round, spawn_burning_item,
+        burn_item, format_hud_time, generate_item_at_position, get_x, get_y,
+        setup_leaderboard_display, setup_round,
     },
     AppState, GgrsConfig,
 };
@@ -159,14 +160,9 @@ pub fn lobby_system(
     let players = socket.players();
     let player_count = players.len();
 
-    let max_prediction = 12;
-
     let mut sess_build = SessionBuilder::<GgrsConfig>::new()
         .with_num_players(matchbox_config.number_of_players)
-        .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 1 })
-        .with_max_prediction_window(max_prediction)
-        .expect("prediction window can't be 0")
-        .with_input_delay(2);
+        .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 1 });
 
     for (i, player) in players.into_iter().enumerate() {
         sess_build = sess_build
@@ -293,12 +289,14 @@ pub fn update_player_portraits(
 }
 
 pub fn player_move(
+    mut commands: Commands,
     inputs: Res<PlayerInputs<GgrsConfig>>,
     mut p: ParamSet<(
         Query<(&Player, &mut Position, &mut Transform, &mut Sprite), Without<Dead>>,
         Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
         Query<&mut Bomb>,
     )>,
+    frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
     if game_freeze.is_some() {
@@ -313,7 +311,6 @@ pub fn player_move(
         })
         .collect();
 
-    let mut bomb_move_vec = vec![];
     for (player, mut position, mut transform, mut sprite) in p.p0().iter_mut() {
         let input = inputs[player.id.0].0 .0;
         for (input_mask, moving_direction) in [
@@ -336,8 +333,11 @@ pub fn player_move(
                 if let Some(&optional_bomb_entity) = solid {
                     if player.can_push_bombs {
                         if let Some(bomb_entity) = optional_bomb_entity {
-                            // TODO figure out how to get a &mut Bomb from the solids query in order to avoid this workaround
-                            bomb_move_vec.push((bomb_entity, moving_direction));
+                            commands.entity(bomb_entity).insert(Moving {
+                                direction: moving_direction,
+                                next_move_frame: frame_count.frame,
+                                frame_interval: MOVING_OBJECT_FRAME_INTERVAL,
+                            });
                         }
                     }
                 } else {
@@ -349,17 +349,15 @@ pub fn player_move(
             }
         }
     }
-
-    for (bomb_entity, direction) in bomb_move_vec {
-        p.p2().get_mut(bomb_entity).unwrap().moving = Some(direction);
-    }
 }
 
-pub fn bomb_move(
+pub fn moving_object_update(
+    mut commands: Commands,
     mut p: ParamSet<(
-        Query<(&mut Bomb, &mut Position, &mut Transform)>,
+        Query<(Entity, &mut Moving, &mut Position, &mut Transform)>,
         Query<&Position, Or<(With<Solid>, With<Item>, With<Player>)>>,
     )>,
+    frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
     if game_freeze.is_some() {
@@ -368,18 +366,19 @@ pub fn bomb_move(
 
     let impassable_positions: HashSet<Position> = p.p1().iter().copied().collect();
 
-    for (mut bomb, mut position, mut transform) in p.p0().iter_mut() {
-        if let Some(direction) = bomb.moving {
-            // TODO bomb movement is fixed to once per frame
-            let new_position = position.offset(direction, 1);
+    for (entity, mut moving, mut position, mut transform) in p.p0().iter_mut() {
+        if frame_count.frame >= moving.next_move_frame {
+            let new_position = position.offset(moving.direction, 1);
             if impassable_positions.get(&new_position).is_none() {
                 *position = new_position;
 
                 let translation = &mut transform.translation;
                 translation.x = get_x(position.x);
                 translation.y = get_y(position.y);
+
+                moving.next_move_frame += moving.frame_interval;
             } else {
-                bomb.moving = None;
+                commands.entity(entity).remove::<Moving>();
             }
         }
     }
@@ -389,7 +388,7 @@ pub fn pick_up_item(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
     mut query: Query<(&mut Player, &Position, &mut BombSatchel), Without<Dead>>,
-    query2: Query<(Entity, &Item, &Position)>,
+    mut query2: Query<(Entity, &Item, &Position, &mut Handle<Image>)>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -397,7 +396,7 @@ pub fn pick_up_item(
         return;
     }
 
-    for (item_entity, &item, &item_position) in query2.iter() {
+    for (item_entity, &item, &item_position, mut item_texture) in query2.iter_mut() {
         let mut players_at_item_position =
             query
                 .iter_mut()
@@ -425,11 +424,11 @@ pub fn pick_up_item(
             }
             (Some(_), Some(_)) => {
                 println!("Multiple players arrived at item position ({item_position:?}) at the same time! In the ensuing chaos the item was destroyed...");
-                commands.entity(item_entity).despawn_recursive();
-                spawn_burning_item(
+                burn_item(
                     &mut commands,
                     &game_textures,
-                    item_position,
+                    item_entity,
+                    &mut item_texture,
                     frame_count.frame,
                 );
             }
@@ -480,7 +479,6 @@ pub fn bomb_drop(
                         owner: Some(player.id),
                         range: bomb_satchel.bomb_range,
                         expiration_frame: frame_count.frame + 2 * FPS,
-                        moving: None,
                     },
                     Solid,
                     *position,
@@ -782,10 +780,9 @@ pub fn explode_bombs(
                         .iter_mut()
                         .filter(|(_, p)| **p == position)
                         .for_each(|(mut b, _)| {
-                            const SHORTENED_FUSE_DURATION: usize = 3;
                             b.expiration_frame = b
                                 .expiration_frame
-                                .min(frame_count.frame + SHORTENED_FUSE_DURATION);
+                                .min(frame_count.frame + BOMB_SHORTENED_FUSE_FRAME_COUNT);
                         });
 
                     // destructible wall burn
@@ -824,21 +821,19 @@ pub fn player_burn(
     }
 
     let fire_positions: HashSet<Position> = query2.iter().copied().collect();
-
-    for (entity, player, position) in query.iter() {
-        if fire_positions.contains(position) {
+    query
+        .iter()
+        .filter(|(_, _, position)| fire_positions.contains(*position))
+        .for_each(|(entity, player, position)| {
             println!("Player burned: {}, position: {position:?}", player.id.0);
             commands.entity(entity).insert(Dead {
                 cleanup_frame: frame_count.frame + PLAYER_DEATH_FRAME_DELAY,
             });
-        }
-    }
+        });
 }
 
-pub fn item_burn(
-    mut commands: Commands,
-    game_textures: Res<GameTextures>,
-    query: Query<(Entity, &Position), With<Item>>,
+pub fn bomb_burn(
+    mut query: Query<(&mut Bomb, &Position)>,
     query2: Query<&Position, With<Fire>>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
@@ -848,11 +843,41 @@ pub fn item_burn(
     }
 
     let fire_positions: HashSet<Position> = query2.iter().copied().collect();
+    query
+        .iter_mut()
+        .filter(|(_, position)| fire_positions.contains(*position))
+        .for_each(|(mut bomb, _)| {
+            bomb.expiration_frame = bomb
+                .expiration_frame
+                .min(frame_count.frame + BOMB_SHORTENED_FUSE_FRAME_COUNT);
+        });
+}
 
-    for (entity, &position) in query.iter().filter(|(_, p)| fire_positions.contains(*p)) {
-        commands.entity(entity).despawn_recursive();
-        spawn_burning_item(&mut commands, &game_textures, position, frame_count.frame);
+pub fn item_burn(
+    mut commands: Commands,
+    game_textures: Res<GameTextures>,
+    mut query: Query<(Entity, &Position, &mut Handle<Image>), With<Item>>,
+    query2: Query<&Position, With<Fire>>,
+    frame_count: Res<FrameCount>,
+    game_freeze: Option<Res<GameFreeze>>,
+) {
+    if game_freeze.is_some() {
+        return;
     }
+
+    let fire_positions: HashSet<Position> = query2.iter().copied().collect();
+    query
+        .iter_mut()
+        .filter(|(_, position, _)| fire_positions.contains(*position))
+        .for_each(|(entity, _, mut texture)| {
+            burn_item(
+                &mut commands,
+                &game_textures,
+                entity,
+                &mut texture,
+                frame_count.frame,
+            );
+        });
 }
 
 pub fn wall_of_death_update(

@@ -1,6 +1,8 @@
 use bevy::{
+    asset::Handle,
+    ecs::entity::Entity,
     prelude::{BuildChildren, ChildBuilder, Commands, NodeBundle, TextBundle, Transform, Vec2},
-    render::color::Color,
+    render::{color::Color, texture::Image},
     sprite::{Sprite, SpriteBundle},
     text::{Text, TextStyle},
     ui::{node_bundles::ImageBundle, PositionType, Style, UiRect, Val},
@@ -464,27 +466,20 @@ pub fn generate_item_at_position(
         .add_rollback();
 }
 
-pub fn spawn_burning_item(
+pub fn burn_item(
     commands: &mut Commands,
     game_textures: &GameTextures,
-    position: Position,
+    item_entity: Entity,
+    item_texture: &mut Handle<Image>,
     current_frame: usize,
 ) {
-    commands.spawn((
-        SpriteBundle {
-            texture: game_textures.burning_item.clone(),
-            transform: Transform::from_xyz(get_x(position.x), get_y(position.y), ITEM_Z_LAYER),
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        position,
-        BurningItem {
+    commands
+        .entity(item_entity)
+        .remove::<Item>()
+        .insert(BurningItem {
             expiration_frame: current_frame + FPS / 2,
-        },
-    ));
+        });
+    *item_texture = game_textures.burning_item.clone();
 }
 
 pub fn setup_leaderboard_display(

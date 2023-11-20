@@ -80,7 +80,13 @@ pub struct Bomb {
     pub owner: Option<PlayerID>,
     pub range: usize,
     pub expiration_frame: usize,
-    pub moving: Option<Direction>,
+}
+
+#[derive(Component, Clone, Copy)]
+pub struct Moving {
+    pub direction: Direction,
+    pub next_move_frame: usize,
+    pub frame_interval: usize,
 }
 
 #[derive(Component, Clone, Copy)]

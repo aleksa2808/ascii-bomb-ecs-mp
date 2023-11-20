@@ -49,6 +49,10 @@ pub const GAME_START_FREEZE_FRAME_COUNT: usize = FPS / 2;
 pub const LEADERBOARD_DISPLAY_FRAME_COUNT: usize = 2 * FPS;
 pub const TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT: usize = 5 * FPS;
 
+pub const BOMB_SHORTENED_FUSE_FRAME_COUNT: usize = 3;
+
+pub const MOVING_OBJECT_FRAME_INTERVAL: usize = 2;
+
 pub const PLAYER_DEATH_FRAME_DELAY: usize = FPS / 2;
 
 // TODO does float precision cause desyncs?

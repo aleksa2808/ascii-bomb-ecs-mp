@@ -123,6 +123,7 @@ pub fn run() {
         .rollback_component_with_copy::<Dead>()
         .rollback_component_with_copy::<Position>()
         .rollback_component_with_copy::<Bomb>()
+        .rollback_component_with_copy::<Moving>()
         .rollback_component_with_copy::<Fuse>()
         .rollback_component_with_copy::<Fire>()
         .rollback_component_with_copy::<Solid>()
@@ -167,7 +168,9 @@ pub fn run() {
                     update_player_portraits,
                     apply_deferred,
                     player_move,
-                    bomb_move,
+                    apply_deferred,
+                    moving_object_update,
+                    apply_deferred,
                     pick_up_item,
                     apply_deferred,
                     bomb_drop,
@@ -185,6 +188,8 @@ pub fn run() {
                     apply_deferred,
                     animate_fuse,
                     player_burn,
+                    apply_deferred,
+                    bomb_burn,
                     apply_deferred,
                     item_burn,
                     apply_deferred,
