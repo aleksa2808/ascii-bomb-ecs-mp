@@ -10,7 +10,7 @@ use bevy_matchbox::{
     MatchboxSocket,
 };
 use itertools::Itertools;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 
 use crate::{
     components::*,
@@ -1046,9 +1046,22 @@ pub fn finish_round(
 }
 
 pub fn cleanup_dead(
+    mut session_rng: ResMut<SessionRng>,
     mut commands: Commands,
     query: Query<(Entity, &Dead)>,
     frame_count: Res<FrameCount>,
+    game_textures: Res<GameTextures>,
+    map_size: Res<MapSize>,
+    query2: Query<
+        &Position,
+        Or<(
+            With<Player>,
+            With<Solid>,
+            With<Fire>,
+            With<BurningItem>,
+            With<Item>,
+        )>,
+    >,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
     if game_freeze.is_some() {
@@ -1058,6 +1071,25 @@ pub fn cleanup_dead(
     for (e, d) in query.iter() {
         if frame_count.frame >= d.cleanup_frame {
             commands.entity(e).despawn_recursive();
+
+            // death pinata
+            let invalid_positions: HashSet<Position> = query2.iter().copied().collect();
+            let valid_positions = (1..map_size.rows - 1)
+                .flat_map(|y| {
+                    (1..map_size.columns - 1).map(move |x| Position {
+                        y: y as isize,
+                        x: x as isize,
+                    })
+                })
+                .filter(|p| !invalid_positions.contains(p));
+            for position in valid_positions.choose_multiple(&mut session_rng.0, 3) {
+                generate_item_at_position(
+                    &mut session_rng.0,
+                    &mut commands,
+                    &game_textures,
+                    position,
+                );
+            }
         }
     }
 }
