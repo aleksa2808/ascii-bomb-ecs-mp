@@ -14,8 +14,9 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
 use crate::{
     components::{
-        BombSatchel, BurningItem, Destructible, GameTimerDisplay, HUDRoot, Item, LeaderboardUI,
-        Player, PlayerPortrait, PlayerPortraitDisplay, Position, Solid, UIComponent, UIRoot, Wall,
+        BombSatchel, BurningItem, Destructible, GameTimerDisplay, HUDRoot, Item,
+        LeaderboardUIContent, LeaderboardUIRoot, Player, PlayerPortrait, PlayerPortraitDisplay,
+        Position, Solid, UIComponent, UIRoot, Wall,
     },
     constants::{
         COLORS, DESTRUCTIBLE_WALL_Z_LAYER, FPS, HUD_HEIGHT, ITEM_Z_LAYER, PIXEL_SCALE,
@@ -497,8 +498,6 @@ pub fn setup_leaderboard_display(
             NodeBundle {
                 style: Style {
                     position_type: PositionType::Absolute,
-                    left: Val::Px(0.0),
-                    top: Val::Px(0.0),
                     height: Val::Px(window_height),
                     width: Val::Px(window_width),
                     ..Default::default()
@@ -507,9 +506,118 @@ pub fn setup_leaderboard_display(
                 ..Default::default()
             },
             UIComponent,
-            LeaderboardUI,
+            LeaderboardUIRoot,
         ))
         .with_children(|parent| {
+            parent
+                .spawn((
+                    NodeBundle {
+                        style: Style {
+                            position_type: PositionType::Absolute,
+                            height: Val::Px(window_height),
+                            width: Val::Px(window_width),
+                            ..Default::default()
+                        },
+                        background_color: COLORS[0].into(),
+                        ..Default::default()
+                    },
+                    UIComponent,
+                    LeaderboardUIContent,
+                ))
+                .with_children(|parent| {
+                    for (&player_id, &score) in &leaderboard.scores {
+                        // spawn player portrait
+                        parent
+                            .spawn((
+                                NodeBundle {
+                                    style: Style {
+                                        position_type: PositionType::Absolute,
+                                        left: Val::Px(4.0 * PIXEL_SCALE as f32),
+                                        top: Val::Px(((6 + player_id.0 * 12) * PIXEL_SCALE) as f32),
+                                        width: Val::Px(TILE_WIDTH as f32),
+                                        height: Val::Px(TILE_HEIGHT as f32),
+                                        ..Default::default()
+                                    },
+                                    background_color: COLORS[2].into(),
+                                    ..Default::default()
+                                },
+                                UIComponent,
+                            ))
+                            .with_children(|parent| {
+                                parent.spawn((
+                                    ImageBundle {
+                                        style: Style {
+                                            width: Val::Percent(100.0),
+                                            height: Val::Percent(100.0),
+                                            ..Default::default()
+                                        },
+                                        image: game_textures
+                                            .get_player_texture(player_id)
+                                            .clone()
+                                            .into(),
+                                        ..Default::default()
+                                    },
+                                    UIComponent,
+                                ));
+                            });
+
+                        // spawn player trophies
+                        for i in 0..score {
+                            parent.spawn((
+                                ImageBundle {
+                                    style: Style {
+                                        position_type: PositionType::Absolute,
+                                        top: Val::Px(((7 + player_id.0 * 12) * PIXEL_SCALE) as f32),
+                                        left: Val::Px(((15 + i * 9) * PIXEL_SCALE) as f32),
+                                        width: Val::Px(5.0 * PIXEL_SCALE as f32),
+                                        height: Val::Px(7.0 * PIXEL_SCALE as f32),
+                                        ..Default::default()
+                                    },
+                                    image: game_textures.trophy.clone().into(),
+                                    ..Default::default()
+                                },
+                                UIComponent,
+                            ));
+                        }
+
+                        if let RoundOutcome::Winner(round_winner_player_id) = round_outcome {
+                            if player_id == round_winner_player_id {
+                                let mut place_text = |y, x, str: &str, c: usize| {
+                                    parent.spawn((
+                                        TextBundle {
+                                            text: Text::from_section(
+                                                str.to_string(),
+                                                TextStyle {
+                                                    font: fonts.mono.clone(),
+                                                    font_size: 2.0 * PIXEL_SCALE as f32,
+                                                    color: COLORS[c].into(),
+                                                },
+                                            ),
+                                            style: Style {
+                                                position_type: PositionType::Absolute,
+                                                top: Val::Px(y as f32 * PIXEL_SCALE as f32),
+                                                left: Val::Px(x as f32 * PIXEL_SCALE as f32),
+                                                ..Default::default()
+                                            },
+                                            ..Default::default()
+                                        },
+                                        UIComponent,
+                                    ));
+                                };
+
+                                place_text(6 + player_id.0 * 12, 15 + (score - 1) * 9 - 2, "*", 15);
+                                place_text(8 + player_id.0 * 12, 15 + (score - 1) * 9 + 6, "*", 15);
+                                place_text(
+                                    10 + player_id.0 * 12,
+                                    15 + (score - 1) * 9 - 1,
+                                    "*",
+                                    15,
+                                );
+                            }
+                        }
+                    }
+                });
+
             // spawn border
             let mut spawn_color = |y: usize, x: usize| {
                 parent.spawn((
@@ -543,89 +651,102 @@ pub fn setup_leaderboard_display(
                 spawn_color(height - 2, x);
                 spawn_color(height - 1, x);
             }
-
-            for (&player_id, &score) in &leaderboard.scores {
-                // spawn player portrait
-                parent
-                    .spawn((
-                        NodeBundle {
-                            style: Style {
-                                position_type: PositionType::Absolute,
-                                left: Val::Px(4.0 * PIXEL_SCALE as f32),
-                                top: Val::Px(((6 + player_id.0 * 12) * PIXEL_SCALE) as f32),
-                                width: Val::Px(TILE_WIDTH as f32),
-                                height: Val::Px(TILE_HEIGHT as f32),
-                                ..Default::default()
-                            },
-                            background_color: COLORS[2].into(),
-                            ..Default::default()
-                        },
-                        UIComponent,
-                    ))
-                    .with_children(|parent| {
-                        parent.spawn((
-                            ImageBundle {
-                                style: Style {
-                                    width: Val::Percent(100.0),
-                                    height: Val::Percent(100.0),
-                                    ..Default::default()
-                                },
-                                image: game_textures.get_player_texture(player_id).clone().into(),
-                                ..Default::default()
-                            },
-                            UIComponent,
-                        ));
-                    });
-
-                // spawn player trophies
-                for i in 0..score {
-                    parent.spawn((
-                        ImageBundle {
-                            style: Style {
-                                position_type: PositionType::Absolute,
-                                top: Val::Px(((7 + player_id.0 * 12) * PIXEL_SCALE) as f32),
-                                left: Val::Px(((15 + i * 9) * PIXEL_SCALE) as f32),
-                                width: Val::Px(5.0 * PIXEL_SCALE as f32),
-                                height: Val::Px(7.0 * PIXEL_SCALE as f32),
-                                ..Default::default()
-                            },
-                            image: game_textures.trophy.clone().into(),
-                            ..Default::default()
-                        },
-                        UIComponent,
-                    ));
-                }
-
-                if let RoundOutcome::Winner(round_winner_player_id) = round_outcome {
-                    if player_id == round_winner_player_id {
-                        let mut place_text = |y, x, str: &str, c: usize| {
-                            parent.spawn((
-                                TextBundle {
-                                    text: Text::from_section(
-                                        str.to_string(),
-                                        TextStyle {
-                                            font: fonts.mono.clone(),
-                                            font_size: 2.0 * PIXEL_SCALE as f32,
-                                            color: COLORS[c].into(),
-                                        },
-                                    ),
-                                    style: Style {
-                                        position_type: PositionType::Absolute,
-                                        top: Val::Px(y as f32 * PIXEL_SCALE as f32),
-                                        left: Val::Px(x as f32 * PIXEL_SCALE as f32),
-                                        ..Default::default()
-                                    },
-                                    ..Default::default()
-                                },
-                                UIComponent,
-                            ));
-                        };
-
-                        place_text(6 + player_id.0 * 12, 15 + (score - 1) * 9 - 2, "*", 15);
-                        place_text(8 + player_id.0 * 12, 15 + (score - 1) * 9 + 6, "*", 15);
-                        place_text(10 + player_id.0 * 12, 15 + (score - 1) * 9 - 1, "*", 15);
-                    }
-                }
-            }
         });
+}
+
+pub fn setup_tournament_winner_display(
+    parent: &mut ChildBuilder,
+    window_height: f32,
+    window_width: f32,
+    game_textures: &GameTextures,
+    fonts: &Fonts,
+    winner: PlayerID,
+) {
+    let offset_y = window_height / 2.0 - (4 * PIXEL_SCALE) as f32 /* accounting for the chicken dinner text */;
+    let offset_x = window_width / 2.0;
+    let portrait_trophy_distance = (4 * PIXEL_SCALE) as f32;
+
+    // spawn the winning player portrait
+    parent
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(offset_y - TILE_HEIGHT as f32 / 2.0),
+                    left: Val::Px(offset_x - TILE_HEIGHT as f32 - portrait_trophy_distance / 2.0),
+                    width: Val::Px(TILE_WIDTH as f32),
+                    height: Val::Px(TILE_HEIGHT as f32),
+                    ..Default::default()
+                },
+                background_color: COLORS[2].into(),
+                ..Default::default()
+            },
+            UIComponent,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                ImageBundle {
+                    style: Style {
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        ..Default::default()
+                    },
+                    image: game_textures.get_player_texture(winner).clone().into(),
+                    ..Default::default()
+                },
+                UIComponent,
+            ));
+        });
+
+    // spawn the winner trophy
+    parent.spawn((
+        ImageBundle {
+            style: Style {
+                position_type: PositionType::Absolute,
+                top: Val::Px(offset_y - (TILE_HEIGHT / 2 - PIXEL_SCALE) as f32),
+                left: Val::Px(offset_x + portrait_trophy_distance / 2.0),
+                width: Val::Px(5.0 * PIXEL_SCALE as f32),
+                height: Val::Px(7.0 * PIXEL_SCALE as f32),
+                ..Default::default()
+            },
+            image: game_textures.trophy.clone().into(),
+            ..Default::default()
+        },
+        UIComponent,
+    ));
+
+    let mut place_text = |y, x, str: &str, c: usize| {
+        parent.spawn((
+            TextBundle {
+                text: Text::from_section(
+                    str.to_string(),
+                    TextStyle {
+                        font: fonts.mono.clone(),
+                        font_size: 2.0 * PIXEL_SCALE as f32,
+                        color: COLORS[c].into(),
+                    },
+                ),
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(offset_y + y as f32 * PIXEL_SCALE as f32),
+                    left: Val::Px(offset_x + x as f32 * PIXEL_SCALE as f32),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            UIComponent,
+        ));
+    };
+
+    // trophy sparkles
+    place_text(-4, 0, "*", 15);
+    place_text(-2, 8, "*", 15);
+    place_text(0, 1, "*", 15);
+
+    place_text(
+        (TILE_WIDTH / PIXEL_SCALE / 2) as isize + 4,
+        -15,
+        "WINNER WINNER CHICKEN DINNER!",
+        15,
+    );
 }

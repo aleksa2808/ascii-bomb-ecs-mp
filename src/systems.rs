@@ -25,7 +25,7 @@ use crate::{
     types::{Direction, PlayerID, PostFreezeAction, RoundOutcome},
     utils::{
         burn_item, format_hud_time, generate_item_at_position, get_x, get_y,
-        setup_leaderboard_display, setup_round,
+        setup_leaderboard_display, setup_round, setup_tournament_winner_display,
     },
     AppState, GgrsConfig,
 };
@@ -1183,17 +1183,35 @@ pub fn show_tournament_winner(
     game_freeze: Option<Res<GameFreeze>>,
     frame_count: Res<FrameCount>,
     mut leaderboard: ResMut<Leaderboard>,
+    game_textures: Res<GameTextures>,
+    fonts: Res<Fonts>,
     mut world_type: ResMut<WorldType>,
+    primary_query: Query<&Window, With<PrimaryWindow>>,
+    query: Query<Entity, With<LeaderboardUIContent>>,
 ) {
     if let Some(GameFreeze {
-        end_frame: game_end_frame,
+        end_frame: freeze_end_frame,
         post_freeze_action: Some(PostFreezeAction::ShowTournamentWinner { winner }),
     }) = game_freeze.as_deref()
     {
-        if frame_count.frame >= *game_end_frame {
-            println!("Player {} WINNER WINNER CHICKEN DINNER", winner.0);
+        if frame_count.frame >= *freeze_end_frame {
+            println!("Player {} won the tournament!", winner.0);
 
-            // TODO show winner
+            // clear the leaderboard display and setup the tournament winner display
+            commands
+                .entity(query.single())
+                .despawn_descendants()
+                .with_children(|parent| {
+                    let window = primary_query.get_single().unwrap();
+                    setup_tournament_winner_display(
+                        parent,
+                        window.height(),
+                        window.width(),
+                        &game_textures,
+                        &fonts,
+                        *winner,
+                    );
+                });
 
             // setup new tournament //
 

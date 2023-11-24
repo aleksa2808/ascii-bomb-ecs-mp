@@ -30,7 +30,10 @@ pub struct PlayerPortraitDisplay;
 pub struct PlayerPortrait(pub PlayerID);
 
 #[derive(Component)]
-pub struct LeaderboardUI;
+pub struct LeaderboardUIRoot;
+
+#[derive(Component)]
+pub struct LeaderboardUIContent;
 
 // In-game
 
