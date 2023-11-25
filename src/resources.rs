@@ -193,6 +193,9 @@ pub struct RngSeeds {
 pub struct SessionRng(pub StdRng);
 
 #[derive(Resource)]
+pub struct LocalPlayerID(pub usize);
+
+#[derive(Resource)]
 pub struct Leaderboard {
     pub scores: HashMap<PlayerID, usize>,
     pub winning_score: usize,

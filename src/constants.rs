@@ -45,6 +45,7 @@ pub const ROUND_DURATION_SECS: usize = 120;
 
 // these need to be adjusted based on FPS as they must not be lower than the max_predictions value
 // TODO can some static asserts be made?
+pub const GET_READY_DISPLAY_FRAME_COUNT: usize = 3 * FPS;
 pub const GAME_START_FREEZE_FRAME_COUNT: usize = FPS / 2;
 pub const LEADERBOARD_DISPLAY_FRAME_COUNT: usize = 2 * FPS;
 pub const TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT: usize = 5 * FPS;

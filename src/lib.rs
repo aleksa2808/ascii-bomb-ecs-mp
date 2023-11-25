@@ -30,6 +30,7 @@ pub enum AppState {
     WebReadyToStart,
     Lobby,
     InGame,
+    Invalid,
 }
 
 impl Default for AppState {
@@ -78,7 +79,10 @@ pub fn run() {
     .add_systems(Update, lobby_system.run_if(in_state(AppState::Lobby)))
     .add_systems(OnExit(AppState::Lobby), teardown_lobby)
     .add_systems(OnEnter(AppState::InGame), setup_game)
-    .add_systems(Update, log_ggrs_events.run_if(in_state(AppState::InGame)));
+    .add_systems(
+        Update,
+        handle_ggrs_events.run_if(in_state(AppState::InGame)),
+    );
 
     #[cfg(not(target_arch = "wasm32"))]
     app.insert_resource(MatchboxConfig {
@@ -109,15 +113,6 @@ pub fn run() {
         .rollback_component_with_copy::<Visibility>()
         .rollback_component_with_copy::<InheritedVisibility>()
         .rollback_component_with_copy::<ViewVisibility>()
-        // HUD components
-        // TODO not sure if these are necessary
-        // .rollback_component_with_copy::<UIRoot>()
-        // .rollback_component_with_copy::<UIComponent>()
-        // .rollback_component_with_copy::<HUDRoot>()
-        // .rollback_component_with_copy::<GameTimerDisplay>()
-        // .rollback_component_with_copy::<PlayerPortraitDisplay>()
-        // .rollback_component_with_copy::<PlayerPortrait>()
-        // .rollback_component_with_copy::<LeaderboardUI>()
         // game components
         .rollback_component_with_copy::<Player>()
         .rollback_component_with_copy::<Dead>()
@@ -138,11 +133,7 @@ pub fn run() {
         .rollback_resource_with_copy::<FrameCount>()
         .rollback_resource_with_copy::<WallOfDeath>()
         // TODO not sure if this is necessary
-        // .rollback_resource_with_copy::<Leaderboard>()
-        // .rollback_resource_with_copy::<GameEndFrame>()
         .rollback_resource_with_copy::<GameFreeze>()
-        // TODO not sure if this is necessary
-        // .rollback_resource_with_copy::<TournamentComplete>()
         // TODO what if two items are switched, is their order also hashed?
         .checksum_component_with_hash::<Player>()
         .checksum_component_with_hash::<Position>()

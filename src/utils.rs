@@ -7,6 +7,7 @@ use bevy::{
     text::{Text, TextStyle},
     ui::{node_bundles::ImageBundle, PositionType, Style, UiRect, Val},
     utils::HashSet,
+    window::Window,
 };
 use bevy_ggrs::AddRollbackCommandExtension;
 use itertools::Itertools;
@@ -34,6 +35,106 @@ pub fn get_x(x: isize) -> f32 {
 
 pub fn get_y(y: isize) -> f32 {
     -(TILE_HEIGHT as f32 / 2.0 + (y * TILE_HEIGHT as isize) as f32)
+}
+
+pub fn setup_get_ready_display(
+    commands: &mut Commands,
+    window: &Window,
+    game_textures: &GameTextures,
+    fonts: &Fonts,
+    number_of_players: usize,
+    local_player_id: usize,
+) {
+    let portrait_distance = (12 - number_of_players) * PIXEL_SCALE;
+    let total_width = number_of_players * (TILE_WIDTH + 2 * PIXEL_SCALE/* border */)
+        + (number_of_players - 1) * portrait_distance;
+
+    let center_y = window.height() / 2.0 - (4 * PIXEL_SCALE) as f32 /* accounting for the get ready text */;
+    let center_x = window.width() / 2.0;
+    let offset_x = center_x - total_width as f32 / 2.0;
+
+    commands
+        .spawn((NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..Default::default()
+            },
+            background_color: COLORS[0].into(),
+            ..Default::default()
+        },))
+        .with_children(|parent| {
+            for i in 0..number_of_players {
+                // highlight the local player
+                let border_color = COLORS[if i == local_player_id { 12 } else { 0 }];
+                let offset_x =
+                    offset_x + (i * (TILE_WIDTH + 2 * PIXEL_SCALE + portrait_distance)) as f32;
+
+                parent
+                    .spawn(NodeBundle {
+                        style: Style {
+                            position_type: PositionType::Absolute,
+                            top: Val::Px(center_y - TILE_HEIGHT as f32 / 2.0),
+                            left: Val::Px(offset_x),
+                            width: Val::Px(8.0 * PIXEL_SCALE as f32),
+                            height: Val::Px(10.0 * PIXEL_SCALE as f32),
+                            border: UiRect {
+                                left: Val::Px(PIXEL_SCALE as f32),
+                                top: Val::Px(PIXEL_SCALE as f32),
+                                right: Val::Px(PIXEL_SCALE as f32),
+                                bottom: Val::Px(PIXEL_SCALE as f32),
+                            },
+                            ..Default::default()
+                        },
+                        background_color: border_color.into(),
+                        ..Default::default()
+                    })
+                    .with_children(|parent| {
+                        parent
+                            .spawn(NodeBundle {
+                                style: Style {
+                                    width: Val::Percent(100.0),
+                                    height: Val::Percent(100.0),
+                                    ..Default::default()
+                                },
+                                background_color: COLORS[2].into(),
+                                ..Default::default()
+                            })
+                            .with_children(|parent| {
+                                parent.spawn(ImageBundle {
+                                    style: Style {
+                                        width: Val::Percent(100.0),
+                                        height: Val::Percent(100.0),
+                                        ..Default::default()
+                                    },
+                                    image: game_textures
+                                        .get_player_texture(PlayerID(i))
+                                        .clone()
+                                        .into(),
+                                    ..Default::default()
+                                });
+                            });
+                    });
+            }
+
+            parent.spawn(TextBundle {
+                text: Text::from_section(
+                    "GET READY!",
+                    TextStyle {
+                        font: fonts.mono.clone(),
+                        font_size: 2.0 * PIXEL_SCALE as f32,
+                        color: COLORS[15].into(),
+                    },
+                ),
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(center_y + (TILE_WIDTH / 2 + 6 * PIXEL_SCALE) as f32),
+                    left: Val::Px(center_x - 5.0 * PIXEL_SCALE as f32),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        });
 }
 
 pub fn format_hud_time(remaining_seconds: usize) -> String {
@@ -662,9 +763,9 @@ pub fn setup_tournament_winner_display(
     fonts: &Fonts,
     winner: PlayerID,
 ) {
-    let offset_y = window_height / 2.0 - (4 * PIXEL_SCALE) as f32 /* accounting for the chicken dinner text */;
-    let offset_x = window_width / 2.0;
-    let portrait_trophy_distance = (4 * PIXEL_SCALE) as f32;
+    let center_y = window_height / 2.0 - (4 * PIXEL_SCALE) as f32 /* accounting for the chicken dinner text */;
+    let center_x = window_width / 2.0;
+    let portrait_trophy_distance = (6 * PIXEL_SCALE) as f32;
 
     // spawn the winning player portrait
     parent
@@ -672,8 +773,8 @@ pub fn setup_tournament_winner_display(
             NodeBundle {
                 style: Style {
                     position_type: PositionType::Absolute,
-                    top: Val::Px(offset_y - TILE_HEIGHT as f32 / 2.0),
-                    left: Val::Px(offset_x - TILE_HEIGHT as f32 - portrait_trophy_distance / 2.0),
+                    top: Val::Px(center_y - TILE_HEIGHT as f32 / 2.0),
+                    left: Val::Px(center_x - TILE_WIDTH as f32 - portrait_trophy_distance / 2.0),
                     width: Val::Px(TILE_WIDTH as f32),
                     height: Val::Px(TILE_HEIGHT as f32),
                     ..Default::default()
@@ -703,8 +804,8 @@ pub fn setup_tournament_winner_display(
         ImageBundle {
             style: Style {
                 position_type: PositionType::Absolute,
-                top: Val::Px(offset_y - (TILE_HEIGHT / 2 - PIXEL_SCALE) as f32),
-                left: Val::Px(offset_x + portrait_trophy_distance / 2.0),
+                top: Val::Px(center_y - (TILE_HEIGHT / 2 - PIXEL_SCALE) as f32),
+                left: Val::Px(center_x + portrait_trophy_distance / 2.0),
                 width: Val::Px(5.0 * PIXEL_SCALE as f32),
                 height: Val::Px(7.0 * PIXEL_SCALE as f32),
                 ..Default::default()
@@ -728,8 +829,8 @@ pub fn setup_tournament_winner_display(
                 ),
                 style: Style {
                     position_type: PositionType::Absolute,
-                    top: Val::Px(offset_y + y as f32 * PIXEL_SCALE as f32),
-                    left: Val::Px(offset_x + x as f32 * PIXEL_SCALE as f32),
+                    top: Val::Px(center_y + y as f32 * PIXEL_SCALE as f32),
+                    left: Val::Px(center_x + x as f32 * PIXEL_SCALE as f32),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -739,14 +840,54 @@ pub fn setup_tournament_winner_display(
     };
 
     // trophy sparkles
-    place_text(-4, 0, "*", 15);
-    place_text(-2, 8, "*", 15);
-    place_text(0, 1, "*", 15);
+    place_text(-4, 1, "*", 15);
+    place_text(-2, 9, "*", 15);
+    place_text(0, 2, "*", 15);
 
     place_text(
         (TILE_WIDTH / PIXEL_SCALE / 2) as isize + 4,
-        -15,
+        -14,
         "WINNER WINNER CHICKEN DINNER!",
         15,
     );
+}
+
+pub fn setup_error_display(
+    commands: &mut Commands,
+    window: &Window,
+    fonts: &Fonts,
+    error_message: &str,
+) {
+    let center_y = window.height() / 2.0 - (4 * PIXEL_SCALE) as f32 /* accounting for the get ready text */;
+    let center_x = window.width() / 2.0;
+
+    commands
+        .spawn((NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..Default::default()
+            },
+            background_color: COLORS[0].into(),
+            ..Default::default()
+        },))
+        .with_children(|parent| {
+            parent.spawn(TextBundle {
+                text: Text::from_section(
+                    error_message,
+                    TextStyle {
+                        font: fonts.mono.clone(),
+                        font_size: 8.0 * PIXEL_SCALE as f32,
+                        color: COLORS[15].into(),
+                    },
+                ),
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(center_y),
+                    left: Val::Px(center_x - (2 * error_message.len() * PIXEL_SCALE) as f32),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        });
 }

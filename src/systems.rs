@@ -3,7 +3,10 @@ use bevy::{
     utils::{HashMap, HashSet},
     window::PrimaryWindow,
 };
-use bevy_ggrs::{ggrs::SessionBuilder, AddRollbackCommandExtension, PlayerInputs, Session};
+use bevy_ggrs::{
+    ggrs::{PlayerType, SessionBuilder},
+    AddRollbackCommandExtension, PlayerInputs, Session,
+};
 use bevy_matchbox::{
     matchbox_socket::{MultipleChannels, WebRtcSocketBuilder},
     prelude::PeerState,
@@ -16,16 +19,18 @@ use crate::{
     components::*,
     constants::{
         BOMB_SHORTENED_FUSE_FRAME_COUNT, BOMB_Z_LAYER, COLORS, FIRE_Z_LAYER, FPS,
-        GAME_START_FREEZE_FRAME_COUNT, HUD_HEIGHT, INPUT_ACTION, INPUT_DOWN, INPUT_LEFT,
-        INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE_PERCENTAGE, LEADERBOARD_DISPLAY_FRAME_COUNT,
-        MOVING_OBJECT_FRAME_INTERVAL, PIXEL_SCALE, PLAYER_DEATH_FRAME_DELAY, TILE_HEIGHT,
-        TILE_WIDTH, TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT, WALL_Z_LAYER,
+        GAME_START_FREEZE_FRAME_COUNT, GET_READY_DISPLAY_FRAME_COUNT, HUD_HEIGHT, INPUT_ACTION,
+        INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE_PERCENTAGE,
+        LEADERBOARD_DISPLAY_FRAME_COUNT, MOVING_OBJECT_FRAME_INTERVAL, PIXEL_SCALE,
+        PLAYER_DEATH_FRAME_DELAY, TILE_HEIGHT, TILE_WIDTH, TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT,
+        WALL_Z_LAYER,
     },
     resources::*,
     types::{Direction, PlayerID, PostFreezeAction, RoundOutcome},
     utils::{
-        burn_item, format_hud_time, generate_item_at_position, get_x, get_y,
-        setup_leaderboard_display, setup_round, setup_tournament_winner_display,
+        burn_item, format_hud_time, generate_item_at_position, get_x, get_y, setup_error_display,
+        setup_get_ready_display, setup_leaderboard_display, setup_round,
+        setup_tournament_winner_display,
     },
     AppState, GgrsConfig,
 };
@@ -158,17 +163,24 @@ pub fn lobby_system(
 
     // extract final player list
     let players = socket.players();
-    let player_count = players.len();
 
     let mut sess_build = SessionBuilder::<GgrsConfig>::new()
         .with_num_players(matchbox_config.number_of_players)
         .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 1 });
 
+    let mut local_player_id = None;
     for (i, player) in players.into_iter().enumerate() {
         sess_build = sess_build
             .add_player(player, i)
             .expect("failed to add player");
+
+        if let PlayerType::Local = player {
+            assert!(local_player_id.is_none());
+            println!("local player id: {i}");
+            local_player_id = Some(LocalPlayerID(i));
+        }
     }
+    commands.insert_resource(local_player_id.unwrap());
 
     let channel = socket.take_channel(0).unwrap();
 
@@ -178,11 +190,6 @@ pub fn lobby_system(
 
     commands.insert_resource(Session::P2P(sess));
 
-    // transition to game state
-    commands.insert_resource(Leaderboard {
-        scores: (0..player_count).map(|p| (PlayerID(p), 0)).collect(),
-        winning_score: 3,
-    });
     app_state.set(AppState::InGame);
 }
 
@@ -195,12 +202,42 @@ pub fn teardown_lobby(
     }
 }
 
-pub fn log_ggrs_events(mut session: ResMut<Session<GgrsConfig>>) {
+pub fn handle_ggrs_events(
+    mut session: ResMut<Session<GgrsConfig>>,
+    mut commands: Commands,
+    primary_query: Query<&Window, With<PrimaryWindow>>,
+    fonts: Res<Fonts>,
+    query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
+    mut app_state: ResMut<NextState<AppState>>,
+) {
     match session.as_mut() {
         Session::P2P(s) => {
             for event in s.events() {
                 info!("GgrsEvent: {event:?}");
-                // TODO do something on desyncs
+                let error_message = match event {
+                    bevy_ggrs::ggrs::GgrsEvent::Disconnected { addr: _ } => Some("DISCONNECTED!"),
+                    bevy_ggrs::ggrs::GgrsEvent::DesyncDetected {
+                        frame: _,
+                        local_checksum: _,
+                        remote_checksum: _,
+                        addr: _,
+                    } => Some("DESYNCED!"),
+                    _ => None,
+                };
+
+                if let Some(error_message) = error_message {
+                    println!("{}", error_message);
+                    commands.remove_resource::<Session<GgrsConfig>>();
+                    query.iter().for_each(|e| commands.entity(e).despawn());
+                    setup_error_display(
+                        &mut commands,
+                        primary_query.single(),
+                        &fonts,
+                        error_message,
+                    );
+                    app_state.set(AppState::Invalid);
+                    return;
+                }
             }
         }
         _ => unreachable!(),
@@ -213,6 +250,9 @@ pub fn setup_game(
     mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
     matchbox_config: Res<MatchboxConfig>,
     frame_count: Res<FrameCount>,
+    game_textures: Res<GameTextures>,
+    fonts: Res<Fonts>,
+    local_player_id: Res<LocalPlayerID>,
 ) {
     let map_size = if matchbox_config.number_of_players > 4 {
         MapSize {
@@ -247,11 +287,29 @@ pub fn setup_game(
     let world_type = WorldType::random(&mut session_rng.0);
     commands.insert_resource(world_type);
 
-    // TODO this is kind of a hack
+    // setup the tournament leaderboard
+    commands.insert_resource(Leaderboard {
+        scores: (0..matchbox_config.number_of_players)
+            .map(|p| (PlayerID(p), 0))
+            .collect(),
+        winning_score: 3,
+    });
+
+    // setup the "get ready" display
+    setup_get_ready_display(
+        &mut commands,
+        primary_query.single(),
+        &game_textures,
+        &fonts,
+        matchbox_config.number_of_players,
+        local_player_id.0,
+    );
+    commands.remove_resource::<LocalPlayerID>();
+
     commands.insert_resource(GameFreeze {
-        end_frame: frame_count.frame, /* this frame */
+        end_frame: frame_count.frame + GET_READY_DISPLAY_FRAME_COUNT,
         post_freeze_action: Some(PostFreezeAction::StartNewRound),
-    })
+    });
 }
 
 pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
@@ -259,7 +317,7 @@ pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
 }
 
 pub fn update_hud_clock(
-    game_end_frame: Res<GameEndFrame>,
+    game_end_frame: Option<Res<GameEndFrame>>,
     mut query: Query<&mut Text, With<GameTimerDisplay>>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
@@ -268,6 +326,7 @@ pub fn update_hud_clock(
         return;
     }
 
+    let game_end_frame = game_end_frame.unwrap();
     let remaining_seconds =
         ((game_end_frame.0 - frame_count.frame) as f32 / FPS as f32).ceil() as usize;
     query.single_mut().sections[0].value = format_hud_time(remaining_seconds);
@@ -883,7 +942,7 @@ pub fn item_burn(
 pub fn wall_of_death_update(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
-    mut wall_of_death: ResMut<WallOfDeath>,
+    wall_of_death: Option<ResMut<WallOfDeath>>,
     world_type: Res<WorldType>,
     map_size: Res<MapSize>,
     query: Query<&Position, (With<Wall>, Without<Destructible>)>,
@@ -895,6 +954,8 @@ pub fn wall_of_death_update(
     if game_freeze.is_some() {
         return;
     }
+
+    let mut wall_of_death = wall_of_death.unwrap();
 
     let get_next_position_direction = |mut position: Position,
                                        mut direction: Direction|
@@ -1047,12 +1108,14 @@ pub fn finish_round(
     mut commands: Commands,
     query: Query<&Player, Without<Dead>>,
     frame_count: Res<FrameCount>,
-    game_end_frame: Res<GameEndFrame>,
+    game_end_frame: Option<Res<GameEndFrame>>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
     if game_freeze.is_some() {
         return;
     }
+
+    let game_end_frame = game_end_frame.unwrap();
 
     let round_outcome = if frame_count.frame >= game_end_frame.0 || query.iter().count() == 0 {
         Some(RoundOutcome::Tie)
