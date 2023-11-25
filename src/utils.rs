@@ -420,7 +420,11 @@ fn spawn_map(
 
     let number_of_players = player_spawn_positions.len();
     // TODO remove f32 and this panic
-    let percent_of_passable_positions_to_fill = if number_of_players > 4 { 70.0 } else { 60.0 };
+    let percent_of_passable_positions_to_fill = match number_of_players {
+        2..=3 => 40.0,
+        4..=8 => 50.0,
+        _ => unreachable!(),
+    };
     let num_of_destructible_walls_to_place = (number_of_passable_positions as f32
         * percent_of_passable_positions_to_fill
         / 100.0) as usize;
