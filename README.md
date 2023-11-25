@@ -1,6 +1,6 @@
 # ascii-bomb-ecs-mp
 
-WIP multiplayer demo of the [ascii-bomb-ecs](https://github.com/aleksa2808/ascii-bomb-ecs) game. Available as a [web build](https://aleksa2808.github.io/ascii-bomb-ecs-mp/).
+WIP multiplayer demo of the [ascii-bomb-ecs](https://github.com/aleksa2808/ascii-bomb-ecs) game. Available as a [web build](https://aleksa2808.github.io/ascii-bomb-ecs-mp-manual/) (the build on the link is slightly modified, with a custom ggrs version (trying to prepare a PR for this)).
 
 ## Build
 
