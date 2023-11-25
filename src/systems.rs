@@ -246,13 +246,8 @@ pub fn handle_ggrs_events(
             for event in s.events() {
                 info!("GgrsEvent: {event:?}");
                 let error_message = match event {
-                    bevy_ggrs::ggrs::GgrsEvent::Disconnected { addr: _ } => Some("DISCONNECTED!"),
-                    bevy_ggrs::ggrs::GgrsEvent::DesyncDetected {
-                        frame: _,
-                        local_checksum: _,
-                        remote_checksum: _,
-                        addr: _,
-                    } => Some("DESYNCED!"),
+                    bevy_ggrs::ggrs::GgrsEvent::Disconnected { .. } => Some("DISCONNECTED!"),
+                    bevy_ggrs::ggrs::GgrsEvent::DesyncDetected { .. } => Some("DESYNCED!"),
                     _ => None,
                 };
 
