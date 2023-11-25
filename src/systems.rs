@@ -35,6 +35,28 @@ use crate::{
     AppState, GgrsConfig,
 };
 
+pub fn print_network_stats_system(
+    time: Res<Time>,
+    mut timer: ResMut<NetworkStatsTimer>,
+    session: Option<Res<Session<GgrsConfig>>>,
+) {
+    if timer.0.tick(time.delta()).just_finished() {
+        if let Some(sess) = session {
+            match sess.as_ref() {
+                Session::P2P(s) => {
+                    let num_players = s.num_players();
+                    for i in 0..num_players {
+                        if let Ok(stats) = s.network_stats(i) {
+                            println!("NetworkStats for player {}: {:?}", i, stats);
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
 pub fn setup_lobby(
     mut commands: Commands,
     matchbox_config: Res<MatchboxConfig>,

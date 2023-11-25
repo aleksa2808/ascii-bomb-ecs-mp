@@ -9,6 +9,9 @@ use crate::{
 };
 
 #[derive(Resource)]
+pub struct NetworkStatsTimer(pub Timer);
+
+#[derive(Resource)]
 pub struct Fonts {
     pub mono: Handle<Font>,
 }

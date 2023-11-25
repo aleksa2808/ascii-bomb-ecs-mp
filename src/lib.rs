@@ -72,6 +72,11 @@ pub fn run() {
     .init_resource::<HUDColors>()
     .init_resource::<GameTextures>()
     .add_state::<AppState>()
+    .insert_resource(NetworkStatsTimer(Timer::from_seconds(
+        2.0,
+        TimerMode::Repeating,
+    )))
+    .add_systems(Update, print_network_stats_system)
     .add_systems(
         OnEnter(AppState::Lobby),
         (setup_lobby, start_matchbox_socket),
@@ -195,11 +200,5 @@ pub fn run() {
                 .chain(),
         )
         .insert_resource(FrameCount { frame: 0 })
-        // TODO add network stats
-        // .insert_resource(NetworkStatsTimer(Timer::from_seconds(
-        //     2.0,
-        //     TimerMode::Repeating,
-        // )))
-        // .add_systems(Update, print_network_stats_system)
         .run();
 }
