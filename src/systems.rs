@@ -71,8 +71,8 @@ pub fn setup_lobby(
         }
     } else {
         MapSize {
-            rows: 11,
-            columns: 15,
+            rows: 9,
+            columns: 13,
         }
     };
     commands.insert_resource(map_size);
