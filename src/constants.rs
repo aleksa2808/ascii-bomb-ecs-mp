@@ -57,5 +57,4 @@ pub const MOVING_OBJECT_FRAME_INTERVAL: usize = 2;
 pub const PLAYER_DEATH_FRAME_DELAY: usize = FPS / 2;
 
 // TODO does float precision cause desyncs?
-// TODO was 10%, adjust
 pub const ITEM_SPAWN_CHANCE_PERCENTAGE: usize = 33;
