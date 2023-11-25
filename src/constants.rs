@@ -41,7 +41,7 @@ pub const INPUT_LEFT: u8 = 1 << 2;
 pub const INPUT_RIGHT: u8 = 1 << 3;
 pub const INPUT_ACTION: u8 = 1 << 4;
 
-pub const ROUND_DURATION_SECS: usize = 120;
+pub const ROUND_DURATION_SECS: usize = 60;
 
 // these need to be adjusted based on FPS as they must not be lower than the max_predictions value
 // TODO can some static asserts be made?
