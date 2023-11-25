@@ -2,12 +2,8 @@ use bevy::{ecs as bevy_ecs, prelude::Component, render::color::Color};
 
 use crate::types::{Direction, PlayerID};
 
-// Lobby
-
 #[derive(Component)]
-pub struct LobbyText;
-#[derive(Component)]
-pub struct LobbyUI;
+pub struct FullscreenMessageText;
 
 // HUD display
 

@@ -15,9 +15,9 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
 use crate::{
     components::{
-        BombSatchel, BurningItem, Destructible, GameTimerDisplay, HUDRoot, Item,
-        LeaderboardUIContent, LeaderboardUIRoot, Player, PlayerPortrait, PlayerPortraitDisplay,
-        Position, Solid, UIComponent, UIRoot, Wall,
+        BombSatchel, BurningItem, Destructible, FullscreenMessageText, GameTimerDisplay, HUDRoot,
+        Item, LeaderboardUIContent, LeaderboardUIRoot, Player, PlayerPortrait,
+        PlayerPortraitDisplay, Position, Solid, UIComponent, UIRoot, Wall,
     },
     constants::{
         COLORS, DESTRUCTIBLE_WALL_Z_LAYER, FPS, HUD_HEIGHT, ITEM_Z_LAYER, PIXEL_SCALE,
@@ -35,6 +35,49 @@ pub fn get_x(x: isize) -> f32 {
 
 pub fn get_y(y: isize) -> f32 {
     -(TILE_HEIGHT as f32 / 2.0 + (y * TILE_HEIGHT as isize) as f32)
+}
+
+pub fn setup_fullscreen_message_display(
+    commands: &mut Commands,
+    window: &Window,
+    fonts: &Fonts,
+    message: &str,
+) {
+    let center_y = window.height() / 2.0 - (4 * PIXEL_SCALE) as f32 /* accounting for the get ready text */;
+    let center_x = window.width() / 2.0;
+
+    commands
+        .spawn((NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..Default::default()
+            },
+            background_color: COLORS[0].into(),
+            ..Default::default()
+        },))
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle {
+                    text: Text::from_section(
+                        message,
+                        TextStyle {
+                            font: fonts.mono.clone(),
+                            font_size: 4.0 * PIXEL_SCALE as f32,
+                            color: COLORS[15].into(),
+                        },
+                    ),
+                    style: Style {
+                        position_type: PositionType::Absolute,
+                        top: Val::Px(center_y),
+                        left: Val::Px(center_x - (message.len() * PIXEL_SCALE) as f32),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                FullscreenMessageText,
+            ));
+        });
 }
 
 pub fn setup_get_ready_display(
@@ -850,44 +893,4 @@ pub fn setup_tournament_winner_display(
         "WINNER WINNER CHICKEN DINNER!",
         15,
     );
-}
-
-pub fn setup_error_display(
-    commands: &mut Commands,
-    window: &Window,
-    fonts: &Fonts,
-    error_message: &str,
-) {
-    let center_y = window.height() / 2.0 - (4 * PIXEL_SCALE) as f32 /* accounting for the get ready text */;
-    let center_x = window.width() / 2.0;
-
-    commands
-        .spawn((NodeBundle {
-            style: Style {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                ..Default::default()
-            },
-            background_color: COLORS[0].into(),
-            ..Default::default()
-        },))
-        .with_children(|parent| {
-            parent.spawn(TextBundle {
-                text: Text::from_section(
-                    error_message,
-                    TextStyle {
-                        font: fonts.mono.clone(),
-                        font_size: 8.0 * PIXEL_SCALE as f32,
-                        color: COLORS[15].into(),
-                    },
-                ),
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    top: Val::Px(center_y),
-                    left: Val::Px(center_x - (2 * error_message.len() * PIXEL_SCALE) as f32),
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-        });
 }

@@ -28,51 +28,51 @@ use crate::{
     resources::*,
     types::{Direction, PlayerID, PostFreezeAction, RoundOutcome},
     utils::{
-        burn_item, format_hud_time, generate_item_at_position, get_x, get_y, setup_error_display,
-        setup_get_ready_display, setup_leaderboard_display, setup_round,
-        setup_tournament_winner_display,
+        burn_item, format_hud_time, generate_item_at_position, get_x, get_y,
+        setup_fullscreen_message_display, setup_get_ready_display, setup_leaderboard_display,
+        setup_round, setup_tournament_winner_display,
     },
     AppState, GgrsConfig,
 };
 
-pub fn setup_lobby(mut commands: Commands, fonts: Res<Fonts>) {
-    commands.spawn(Camera2dBundle::default());
+pub fn setup_lobby(
+    mut commands: Commands,
+    matchbox_config: Res<MatchboxConfig>,
+    fonts: Res<Fonts>,
+    mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    // choose map size based on player count
+    let map_size = if matchbox_config.number_of_players > 4 {
+        MapSize {
+            rows: 13,
+            columns: 17,
+        }
+    } else {
+        MapSize {
+            rows: 11,
+            columns: 15,
+        }
+    };
+    commands.insert_resource(map_size);
 
-    // All this is just for spawning centered text.
-    commands
-        .spawn(NodeBundle {
-            style: Style {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                position_type: PositionType::Absolute,
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::FlexEnd,
-                ..default()
-            },
-            background_color: Color::rgb(0.43, 0.41, 0.38).into(),
-            ..default()
-        })
-        .with_children(|parent| {
-            parent
-                .spawn(TextBundle {
-                    style: Style {
-                        align_self: AlignSelf::Center,
-                        justify_content: JustifyContent::Center,
-                        ..default()
-                    },
-                    text: Text::from_section(
-                        "Entering lobby...",
-                        TextStyle {
-                            font: fonts.mono.clone(),
-                            font_size: 96.,
-                            color: Color::BLACK,
-                        },
-                    ),
-                    ..default()
-                })
-                .insert(LobbyText);
-        })
-        .insert(LobbyUI);
+    // resize window based on map size
+    let mut window = primary_query.single_mut();
+    window.resolution.set(
+        (map_size.columns * TILE_WIDTH) as f32,
+        (HUD_HEIGHT + map_size.rows * TILE_HEIGHT) as f32,
+    );
+
+    // spawn the main camera
+    commands.spawn(Camera2dBundle {
+        transform: Transform::from_xyz(
+            ((map_size.columns * TILE_WIDTH) as f32) / 2.0,
+            -((map_size.rows * TILE_HEIGHT - HUD_HEIGHT) as f32 / 2.0),
+            999.9,
+        ),
+        ..default()
+    });
+
+    setup_fullscreen_message_display(&mut commands, &window, &fonts, "Entering lobby...");
 }
 
 pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<MatchboxConfig>) {
@@ -108,7 +108,8 @@ pub fn lobby_system(
     mut socket: ResMut<MatchboxSocket<MultipleChannels>>,
     mut rng_seeds: ResMut<RngSeeds>,
     mut commands: Commands,
-    mut query: Query<&mut Text, With<LobbyText>>,
+    primary_query: Query<&Window, With<PrimaryWindow>>,
+    mut query: Query<(&mut Text, &mut Style), With<FullscreenMessageText>>,
 ) {
     // regularly call update_peers to update the list of connected peers
     for (peer, new_state) in socket.update_peers() {
@@ -143,7 +144,17 @@ pub fn lobby_system(
     }
 
     let remaining = matchbox_config.number_of_players - (rng_seeds.remote.len() + 1);
-    query.single_mut().sections[0].value = format!("Waiting for {remaining} more player(s)");
+
+    // update and recenter the info text
+    {
+        let message = format!("Waiting for {remaining} more player(s)");
+        let message_length = message.len();
+        let (mut text, mut style) = query.single_mut();
+        text.sections[0].value = message;
+        style.left =
+            Val::Px(primary_query.single().width() / 2.0 - (message_length * PIXEL_SCALE) as f32);
+    }
+
     if remaining > 0 {
         return;
     }
@@ -194,12 +205,10 @@ pub fn lobby_system(
 }
 
 pub fn teardown_lobby(
-    query: Query<Entity, Or<(With<LobbyUI>, With<Camera2d>)>>,
+    query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
     mut commands: Commands,
 ) {
-    for e in query.iter() {
-        commands.entity(e).despawn_recursive();
-    }
+    query.iter().for_each(|e| commands.entity(e).despawn());
 }
 
 pub fn handle_ggrs_events(
@@ -229,7 +238,7 @@ pub fn handle_ggrs_events(
                     println!("{}", error_message);
                     commands.remove_resource::<Session<GgrsConfig>>();
                     query.iter().for_each(|e| commands.entity(e).despawn());
-                    setup_error_display(
+                    setup_fullscreen_message_display(
                         &mut commands,
                         primary_query.single(),
                         &fonts,
@@ -247,42 +256,13 @@ pub fn handle_ggrs_events(
 pub fn setup_game(
     mut commands: Commands,
     mut session_rng: ResMut<SessionRng>,
-    mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
+    primary_query: Query<&Window, With<PrimaryWindow>>,
     matchbox_config: Res<MatchboxConfig>,
     frame_count: Res<FrameCount>,
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     local_player_id: Res<LocalPlayerID>,
 ) {
-    let map_size = if matchbox_config.number_of_players > 4 {
-        MapSize {
-            rows: 13,
-            columns: 17,
-        }
-    } else {
-        MapSize {
-            rows: 11,
-            columns: 15,
-        }
-    };
-    commands.insert_resource(map_size);
-
-    // resize window based on map size
-    primary_query.get_single_mut().unwrap().resolution.set(
-        (map_size.columns * TILE_WIDTH) as f32,
-        (HUD_HEIGHT + map_size.rows * TILE_HEIGHT) as f32,
-    );
-
-    // spawn the main game camera
-    commands.spawn(Camera2dBundle {
-        transform: Transform::from_xyz(
-            ((map_size.columns * TILE_WIDTH) as f32) / 2.0,
-            -((map_size.rows * TILE_HEIGHT - HUD_HEIGHT) as f32 / 2.0),
-            999.9,
-        ),
-        ..default()
-    });
-
     // choose the initial world
     let world_type = WorldType::random(&mut session_rng.0);
     commands.insert_resource(world_type);
