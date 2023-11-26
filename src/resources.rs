@@ -189,7 +189,7 @@ pub struct MatchboxConfig {
 #[derive(Resource)]
 pub struct RngSeeds {
     pub local: u64,
-    pub remote: HashMap<PeerId, u64>,
+    pub remote: HashMap<PeerId, Option<u64>>,
 }
 
 #[derive(Resource, Clone)]

@@ -144,11 +144,19 @@ pub fn lobby_system(
         match new_state {
             PeerState::Connected => {
                 info!("Peer {peer} connected, sending them our local RNG seed.");
+
+                // send the local RNG seed to peer
                 let packet = rng_seeds.local.to_be_bytes().to_vec().into_boxed_slice();
                 socket.channel(1).send(packet, peer);
+
+                // reserve a spot for the peer's incoming RNG seed
+                rng_seeds.remote.insert(peer, None);
             }
             PeerState::Disconnected => {
                 info!("Peer {peer} disconnected.");
+
+                // clear the peer's RNG seed spot
+                rng_seeds.remote.remove(&peer);
             }
         }
     }
@@ -163,16 +171,21 @@ pub fn lobby_system(
             .for_each(|(i, &b)| remote_seed[i] = b);
         let remote_seed = u64::from_be_bytes(remote_seed);
 
-        info!("Got RNG seed from {peer}: {remote_seed}");
-        let old_value = rng_seeds.remote.insert(peer, remote_seed);
-        assert!(
-            old_value.is_none(),
-            "Received RNG seed from {} twice!",
-            peer
-        );
+        if let Some(rng_seed) = rng_seeds.remote.get_mut(&peer) {
+            assert!(
+                rng_seed.is_none(),
+                "Received an RNG seed from peer {peer} twice!",
+            );
+            info!("Received an RNG seed from peer {peer}: {remote_seed}");
+            *rng_seed = Some(remote_seed);
+        } else {
+            info!("Received an RNG seed from a disconnected peer {peer}, discarding...")
+        }
     }
 
-    let remaining = matchbox_config.number_of_players - (rng_seeds.remote.len() + 1);
+    let peer_rng_seeds: Vec<u64> = rng_seeds.remote.values().filter_map(|r| *r).collect();
+    let remaining =
+        matchbox_config.number_of_players - (1 /* local player */ + peer_rng_seeds.len());
 
     // update and recenter the info text
     {
@@ -188,13 +201,8 @@ pub fn lobby_system(
         return;
     }
 
-    let shared_seed = rng_seeds.local
-        ^ rng_seeds
-            .remote
-            .values()
-            .copied()
-            .reduce(|acc, e| acc ^ e)
-            .unwrap();
+    let shared_seed =
+        rng_seeds.local ^ peer_rng_seeds.into_iter().reduce(|acc, e| acc ^ e).unwrap();
     info!("Generated the shared RNG seed: {shared_seed}");
     commands.remove_resource::<RngSeeds>();
     commands.insert_resource(SessionRng(StdRng::seed_from_u64(shared_seed)));
