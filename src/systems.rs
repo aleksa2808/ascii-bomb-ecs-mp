@@ -47,7 +47,7 @@ pub fn print_network_stats_system(
                     let num_players = s.num_players();
                     for i in 0..num_players {
                         if let Ok(stats) = s.network_stats(i) {
-                            println!("NetworkStats for player {}: {:?}", i, stats);
+                            info!("NetworkStats for player {}: {:?}", i, stats);
                         }
                     }
                 }
@@ -257,7 +257,7 @@ pub fn handle_ggrs_events(
                 };
 
                 if let Some(error_message) = error_message {
-                    println!("{}", error_message);
+                    warn!("{}", error_message);
                     commands.remove_resource::<Session<GgrsConfig>>();
                     query.iter().for_each(|e| commands.entity(e).despawn());
                     setup_fullscreen_message_display(

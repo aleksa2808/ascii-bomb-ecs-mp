@@ -33,8 +33,6 @@ pub const ITEM_Z_LAYER: f32 = 20.0;
 pub const DESTRUCTIBLE_WALL_Z_LAYER: f32 = 10.0;
 pub const FIRE_Z_LAYER: f32 = 5.0;
 
-pub const FPS: usize = 60;
-
 pub const INPUT_UP: u8 = 1 << 0;
 pub const INPUT_DOWN: u8 = 1 << 1;
 pub const INPUT_LEFT: u8 = 1 << 2;
@@ -43,6 +41,8 @@ pub const INPUT_ACTION: u8 = 1 << 4;
 
 pub const ROUND_DURATION_SECS: usize = 60;
 
+pub const FPS: usize = 30;
+
 // these need to be adjusted based on FPS as they must not be lower than the max_predictions value
 // TODO can some static asserts be made?
 pub const GET_READY_DISPLAY_FRAME_COUNT: usize = 3 * FPS;
@@ -50,9 +50,9 @@ pub const GAME_START_FREEZE_FRAME_COUNT: usize = FPS / 2;
 pub const LEADERBOARD_DISPLAY_FRAME_COUNT: usize = 2 * FPS;
 pub const TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT: usize = 5 * FPS;
 
-pub const BOMB_SHORTENED_FUSE_FRAME_COUNT: usize = 3;
+pub const BOMB_SHORTENED_FUSE_FRAME_COUNT: usize = 2;
 
-pub const MOVING_OBJECT_FRAME_INTERVAL: usize = 2;
+pub const MOVING_OBJECT_FRAME_INTERVAL: usize = 1;
 
 pub const PLAYER_DEATH_FRAME_DELAY: usize = FPS / 2;
 
