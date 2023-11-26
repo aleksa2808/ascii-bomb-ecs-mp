@@ -107,7 +107,7 @@ pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<Matchb
     };
 
     let room_url = format!("{}/{}", &matchbox_config.signal_server_address, room_id);
-    info!("connecting to matchbox server: {room_url:?}");
+    info!("Connecting to the matchbox server: {room_url:?}");
 
     commands.insert_resource(MatchboxSocket::from(
         WebRtcSocketBuilder::new(room_url)
@@ -143,11 +143,13 @@ pub fn lobby_system(
         // you can also handle the specific dis(connections) as they occur:
         match new_state {
             PeerState::Connected => {
-                info!("peer {peer} connected, sending them our local RNG seed");
+                info!("Peer {peer} connected, sending them our local RNG seed.");
                 let packet = rng_seeds.local.to_be_bytes().to_vec().into_boxed_slice();
                 socket.channel(1).send(packet, peer);
             }
-            PeerState::Disconnected => info!("peer {peer} disconnected"),
+            PeerState::Disconnected => {
+                info!("Peer {peer} disconnected.");
+            }
         }
     }
 
@@ -174,7 +176,7 @@ pub fn lobby_system(
 
     // update and recenter the info text
     {
-        let message = format!("Waiting for {remaining} more player(s)");
+        let message = format!("Waiting for {remaining} more player(s)...");
         let message_length = message.len();
         let (mut text, mut style) = query.single_mut();
         text.sections[0].value = message;
@@ -197,8 +199,6 @@ pub fn lobby_system(
     commands.remove_resource::<RngSeeds>();
     commands.insert_resource(SessionRng(StdRng::seed_from_u64(shared_seed)));
 
-    info!("All peers have joined and the shared RNG seed was created, going in-game");
-
     // extract final player list
     let players = socket.players();
 
@@ -214,7 +214,7 @@ pub fn lobby_system(
 
         if let PlayerType::Local = player {
             assert!(local_player_id.is_none());
-            println!("local player id: {i}");
+            info!("Local player ID: {i}");
             local_player_id = Some(LocalPlayerID(i));
         }
     }
@@ -472,7 +472,10 @@ pub fn pick_up_item(
                 // There are no players at this position
             }
             (Some((mut player, mut bomb_satchel)), None) => {
-                println!("powered up: {item_position:?}");
+                info!(
+                    "[frame:{}] Player {} picked up {:?} at position: {item_position:?}",
+                    frame_count.frame, player.id.0, item,
+                );
                 match item {
                     Item::BombsUp => bomb_satchel.bombs_available += 1,
                     Item::RangeUp => bomb_satchel.bomb_range += 1,
@@ -484,7 +487,7 @@ pub fn pick_up_item(
                 commands.entity(item_entity).despawn_recursive();
             }
             (Some(_), Some(_)) => {
-                println!("Multiple players arrived at item position ({item_position:?}) at the same time! In the ensuing chaos the item was destroyed...");
+                info!("[frame:{}] Multiple players arrived at item position ({item_position:?}) at the same time! In the ensuing chaos the item was destroyed...", frame_count.frame);
                 burn_item(
                     &mut commands,
                     &game_textures,
@@ -518,7 +521,10 @@ pub fn bomb_drop(
             && bomb_satchel.bombs_available > 0
             && !query2.iter().any(|p| *p == *position)
         {
-            println!("drop bomb: {:?}", position);
+            info!(
+                "[frame:{}] Player {} placed a bomb at position: {:?}",
+                frame_count.frame, player.id.0, position
+            );
             bomb_satchel.bombs_available -= 1;
 
             commands
@@ -886,7 +892,10 @@ pub fn player_burn(
         .iter()
         .filter(|(_, _, position)| fire_positions.contains(*position))
         .for_each(|(entity, player, position)| {
-            println!("Player burned: {}, position: {position:?}", player.id.0);
+            info!(
+                "[frame:{}] Player {} was burned at position: {position:?}",
+                frame_count.frame, player.id.0
+            );
             commands.entity(entity).insert(Dead {
                 cleanup_frame: frame_count.frame + PLAYER_DEATH_FRAME_DELAY,
             });
@@ -1010,7 +1019,10 @@ pub fn wall_of_death_update(
         for (entity, position, bomb) in query2.iter().filter(|(_, &p, _)| p == position) {
             if let Ok((player, _, dead)) = query3.get(entity) {
                 if dead.is_none() {
-                    println!("Player crushed: {}, position: {position:?}", player.id.0);
+                    info!(
+                        "[frame:{}] Player {} was crushed at position: {position:?}",
+                        frame_count.frame, player.id.0
+                    );
                     commands.entity(entity).insert(Dead {
                         cleanup_frame: frame_count.frame + PLAYER_DEATH_FRAME_DELAY,
                     });
@@ -1058,7 +1070,7 @@ pub fn wall_of_death_update(
         let new_state = match *wall_of_death {
             WallOfDeath::Dormant { activation_frame } => {
                 if frame_count.frame >= activation_frame {
-                    println!("Wall of Death activated!");
+                    info!("[frame:{}] Wall of Death activated!", frame_count.frame);
 
                     Some(WallOfDeath::Active {
                         position: Position {
@@ -1203,7 +1215,7 @@ pub fn show_leaderboard(
         if frame_count.frame >= *freeze_end_frame {
             let next_action = match round_outcome {
                 RoundOutcome::Winner(player_id) => {
-                    println!("Round winner: {:?}", player_id.0);
+                    info!("Player {} won the round!", player_id.0);
                     let player_score = leaderboard.scores.get_mut(player_id).unwrap();
                     *player_score += 1;
 
@@ -1214,7 +1226,7 @@ pub fn show_leaderboard(
                     }
                 }
                 RoundOutcome::Tie => {
-                    println!("Tie!");
+                    info!("The round was a tie!");
                     PostFreezeAction::StartNewRound
                 }
             };
@@ -1260,7 +1272,7 @@ pub fn show_tournament_winner(
     }) = game_freeze.as_deref()
     {
         if frame_count.frame >= *freeze_end_frame {
-            println!("Player {} won the tournament!", winner.0);
+            info!("Player {} won the tournament!", winner.0);
 
             // clear the leaderboard display and setup the tournament winner display
             commands

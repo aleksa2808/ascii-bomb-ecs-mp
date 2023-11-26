@@ -113,7 +113,7 @@ pub struct Crumbling {
     pub expiration_frame: usize,
 }
 
-#[derive(Component, Clone, Copy, Hash)]
+#[derive(Component, Debug, Clone, Copy, Hash)]
 pub enum Item {
     BombsUp,
     RangeUp,
