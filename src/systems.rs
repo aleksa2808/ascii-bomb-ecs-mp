@@ -8,7 +8,7 @@ use bevy_ggrs::{
     AddRollbackCommandExtension, PlayerInputs, Session,
 };
 use bevy_matchbox::{
-    matchbox_socket::{MultipleChannels, WebRtcSocketBuilder},
+    matchbox_socket::{MultipleChannels, RtcIceServerConfig, WebRtcSocketBuilder},
     prelude::PeerState,
     MatchboxSocket,
 };
@@ -28,7 +28,7 @@ use crate::{
     resources::*,
     types::{Direction, PlayerID, PostFreezeAction, RoundOutcome},
     utils::{
-        burn_item, format_hud_time, generate_item_at_position, get_x, get_y,
+        burn_item, decode, format_hud_time, generate_item_at_position, get_x, get_y,
         setup_fullscreen_message_display, setup_get_ready_display, setup_leaderboard_display,
         setup_round, setup_tournament_winner_display,
     },
@@ -111,6 +111,11 @@ pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<Matchb
 
     commands.insert_resource(MatchboxSocket::from(
         WebRtcSocketBuilder::new(room_url)
+            .ice_server(RtcIceServerConfig {
+                urls: vec![decode("dHVybjpldS10dXJuNy54aXJzeXMuY29tOjM0Nzg/dHJhbnNwb3J0PXVkcA")],
+                username: Some(decode("UENMWW5yLWpYZjRZd1VPRDFBR1pxdHVpQzRZeEZFenlJVi10X09LTmxQUG9qbkN6UG5BeXVHVUdDZ2hQTEVfa0FBQUFBR1ZTU21oaGJHVnJjMkV5T0RBNA")),
+                credential: Some(decode("MjI0ZDdhZmEtODIzZi0xMWVlLWFlODMtMDI0MmFjMTQwMDA0")),
+            })
             .add_ggrs_channel()
             .add_reliable_channel()
             .build(),

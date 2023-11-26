@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
 use bevy::{
     asset::Handle,
     ecs::entity::Entity,
@@ -35,6 +36,10 @@ pub fn get_x(x: isize) -> f32 {
 
 pub fn get_y(y: isize) -> f32 {
     -(TILE_HEIGHT as f32 / 2.0 + (y * TILE_HEIGHT as isize) as f32)
+}
+
+pub fn decode(input: &str) -> String {
+    String::from_utf8(STANDARD_NO_PAD.decode(input).unwrap()).unwrap()
 }
 
 pub fn setup_fullscreen_message_display(
