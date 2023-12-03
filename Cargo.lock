@@ -805,8 +805,7 @@ dependencies = [
 [[package]]
 name = "bevy_ggrs"
 version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce19ce4d45ad9699d14dfba7f720ec287e3eb6af9f50c7cc8d842014579eea44"
+source = "git+https://github.com/aleksa2808/bevy_ggrs#d5152ea998dfdbe6602a1d97285c82fb5f4f5036"
 dependencies = [
  "bevy",
  "bytemuck",
@@ -2298,7 +2297,7 @@ dependencies = [
 [[package]]
 name = "ggrs"
 version = "0.10.0"
-source = "git+https://github.com/aleksa2808/ggrs#a26c40c7dc07640947b01363d26d60d9f8833cbe"
+source = "git+https://github.com/aleksa2808/ggrs#bc6cfc28f8368db50385e25d369200dafa86ee48"
 dependencies = [
  "bincode",
  "bitfield-rle",
