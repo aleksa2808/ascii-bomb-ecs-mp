@@ -5,7 +5,7 @@ use bevy::{
 };
 use bevy_ggrs::{
     ggrs::{PlayerType, SessionBuilder},
-    AddRollbackCommandExtension, PlayerInputs, Session,
+    AddRollbackCommandExtension, PlayerInputs, Rollback, RollbackOrdered, Session,
 };
 use bevy_matchbox::{
     matchbox_socket::{MultipleChannels, RtcIceServerConfig, WebRtcSocketBuilder},
@@ -13,7 +13,11 @@ use bevy_matchbox::{
     MatchboxSocket,
 };
 use itertools::Itertools;
-use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    seq::{IteratorRandom, SliceRandom},
+    Rng, SeedableRng,
+};
 
 use crate::{
     components::*,
@@ -61,7 +65,7 @@ pub fn setup_lobby(
     mut commands: Commands,
     matchbox_config: Res<MatchboxConfig>,
     fonts: Res<Fonts>,
-    mut primary_query: Query<&mut Window, With<PrimaryWindow>>,
+    mut primary_window_query: Query<&mut Window, With<PrimaryWindow>>,
 ) {
     // choose map size based on player count
     let map_size = if matchbox_config.number_of_players > 4 {
@@ -78,7 +82,7 @@ pub fn setup_lobby(
     commands.insert_resource(map_size);
 
     // resize window based on map size
-    let mut window = primary_query.single_mut();
+    let mut window = primary_window_query.single_mut();
     window.resolution.set(
         (map_size.columns * TILE_WIDTH) as f32,
         (HUD_HEIGHT + map_size.rows * TILE_HEIGHT) as f32,
@@ -135,8 +139,8 @@ pub fn lobby_system(
     mut socket: ResMut<MatchboxSocket<MultipleChannels>>,
     mut rng_seeds: ResMut<RngSeeds>,
     mut commands: Commands,
-    primary_query: Query<&Window, With<PrimaryWindow>>,
-    mut query: Query<(&mut Text, &mut Style), With<FullscreenMessageText>>,
+    primary_window_query: Query<&Window, With<PrimaryWindow>>,
+    mut info_text_query: Query<(&mut Text, &mut Style), With<FullscreenMessageText>>,
 ) {
     // regularly call update_peers to update the list of connected peers
     for (peer, new_state) in socket.update_peers() {
@@ -183,7 +187,7 @@ pub fn lobby_system(
         }
     }
 
-    let peer_rng_seeds: Vec<u64> = rng_seeds.remote.values().filter_map(|r| *r).collect();
+    let peer_rng_seeds = rng_seeds.remote.values().filter_map(|r| *r).collect_vec();
     let remaining =
         matchbox_config.number_of_players - (1 /* local player */ + peer_rng_seeds.len());
 
@@ -191,10 +195,11 @@ pub fn lobby_system(
     {
         let message = format!("Waiting for {remaining} more player(s)...");
         let message_length = message.len();
-        let (mut text, mut style) = query.single_mut();
+        let (mut text, mut style) = info_text_query.single_mut();
         text.sections[0].value = message;
-        style.left =
-            Val::Px(primary_query.single().width() / 2.0 - (message_length * PIXEL_SCALE) as f32);
+        style.left = Val::Px(
+            primary_window_query.single().width() / 2.0 - (message_length * PIXEL_SCALE) as f32,
+        );
     }
 
     if remaining > 0 {
@@ -240,18 +245,20 @@ pub fn lobby_system(
 }
 
 pub fn teardown_lobby(
-    query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
+    teardown_entities_query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
     mut commands: Commands,
 ) {
-    query.iter().for_each(|e| commands.entity(e).despawn());
+    teardown_entities_query
+        .iter()
+        .for_each(|e| commands.entity(e).despawn());
 }
 
 pub fn handle_ggrs_events(
     mut session: ResMut<Session<GgrsConfig>>,
     mut commands: Commands,
-    primary_query: Query<&Window, With<PrimaryWindow>>,
     fonts: Res<Fonts>,
-    query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
+    primary_window_query: Query<&Window, With<PrimaryWindow>>,
+    teardown_entities_query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
     mut app_state: ResMut<NextState<AppState>>,
 ) {
     match session.as_mut() {
@@ -267,14 +274,16 @@ pub fn handle_ggrs_events(
                 if let Some(error_message) = error_message {
                     warn!("{}", error_message);
                     commands.remove_resource::<Session<GgrsConfig>>();
-                    query.iter().for_each(|e| commands.entity(e).despawn());
+                    teardown_entities_query
+                        .iter()
+                        .for_each(|e| commands.entity(e).despawn());
                     setup_fullscreen_message_display(
                         &mut commands,
-                        primary_query.single(),
+                        primary_window_query.single(),
                         &fonts,
                         error_message,
                     );
-                    app_state.set(AppState::Invalid);
+                    app_state.set(AppState::Error);
                     return;
                 }
             }
@@ -286,7 +295,7 @@ pub fn handle_ggrs_events(
 pub fn setup_game(
     mut commands: Commands,
     mut session_rng: ResMut<SessionRng>,
-    primary_query: Query<&Window, With<PrimaryWindow>>,
+    primary_window_query: Query<&Window, With<PrimaryWindow>>,
     matchbox_config: Res<MatchboxConfig>,
     frame_count: Res<FrameCount>,
     game_textures: Res<GameTextures>,
@@ -308,7 +317,7 @@ pub fn setup_game(
     // setup the "get ready" display
     setup_get_ready_display(
         &mut commands,
-        primary_query.single(),
+        primary_window_query.single(),
         &game_textures,
         &fonts,
         matchbox_config.number_of_players,
@@ -328,7 +337,7 @@ pub fn increase_frame_system(mut frame_count: ResMut<FrameCount>) {
 
 pub fn update_hud_clock(
     game_end_frame: Option<Res<GameEndFrame>>,
-    mut query: Query<&mut Text, With<GameTimerDisplay>>,
+    mut clock_text_query: Query<&mut Text, With<GameTimerDisplay>>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -339,16 +348,16 @@ pub fn update_hud_clock(
     let game_end_frame = game_end_frame.unwrap();
     let remaining_seconds =
         ((game_end_frame.0 - frame_count.frame) as f32 / FPS as f32).ceil() as usize;
-    query.single_mut().sections[0].value = format_hud_time(remaining_seconds);
+    clock_text_query.single_mut().sections[0].value = format_hud_time(remaining_seconds);
 }
 
 pub fn update_player_portraits(
-    query: Query<&Player>,
-    mut query2: Query<(&mut Visibility, &PlayerPortrait)>,
+    player_query: Query<&Player>,
+    mut portrait_visibility_query: Query<(&mut Visibility, &PlayerPortrait)>,
 ) {
-    let player_ids: HashSet<PlayerID> = query.iter().map(|player| player.id).collect();
+    let player_ids: HashSet<PlayerID> = player_query.iter().map(|player| player.id).collect();
 
-    for (mut visibility, portrait) in query2.iter_mut() {
+    for (mut visibility, portrait) in portrait_visibility_query.iter_mut() {
         if player_ids.contains(&portrait.0) {
             *visibility = Visibility::Visible;
         } else {
@@ -358,13 +367,21 @@ pub fn update_player_portraits(
 }
 
 pub fn player_move(
+    mut session_rng: ResMut<SessionRng>,
     mut commands: Commands,
     inputs: Res<PlayerInputs<GgrsConfig>>,
-    mut p: ParamSet<(
-        Query<(&Player, &mut Position, &mut Transform, &mut Sprite), Without<Dead>>,
-        Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
-        Query<&mut Bomb>,
-    )>,
+    rollback_ordered: Res<RollbackOrdered>,
+    mut alive_player_query: Query<
+        (
+            &Rollback,
+            &Player,
+            &mut Position,
+            &mut Transform,
+            &mut Sprite,
+        ),
+        (Without<Dead>, Without<Solid>),
+    >,
+    solid_object_query: Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -372,15 +389,33 @@ pub fn player_move(
         return;
     }
 
-    let solids: HashMap<Position, Option<Entity>> = p
-        .p1()
+    let mut solids = HashMap::new();
+    for (p, b) in solid_object_query
         .iter()
         .map(|(solid_entity, solid_position, optional_bomb)| {
             (*solid_position, optional_bomb.map(|_| solid_entity))
         })
-        .collect();
+    {
+        let previous_item = solids.insert(p, b);
 
-    for (player, mut position, mut transform, mut sprite) in p.p0().iter_mut() {
+        // there must only be one solid per position
+        // if there are multiple bombs on the same position only one would get updated which could lead to a desync
+        // TODO maybe add a global game rules checking system
+        assert!(
+            previous_item.is_none(),
+            "Multiple solid objects on position {p:?}!"
+        );
+    }
+    let solids = solids;
+
+    // player sorting is needed to ensure determinism of pushing bombs
+    let mut players = alive_player_query
+        .iter_mut()
+        .sorted_by_cached_key(|q| rollback_ordered.order(*q.0))
+        .collect_vec();
+    // shuffle to ensure fairness in situations where two players push the same bomb in the same frame
+    players.shuffle(&mut session_rng.0);
+    for (_, player, mut position, mut transform, mut sprite) in players {
         let input = inputs[player.id.0].0 .0;
         for (input_mask, moving_direction) in [
             (INPUT_UP, Direction::Up),
@@ -389,6 +424,11 @@ pub fn player_move(
             (INPUT_RIGHT, Direction::Right),
         ] {
             if input & input_mask != 0 {
+                info!(
+                    "[frame:{}] Player {} moved in direction {moving_direction:?} at position: {position:?}",
+                    frame_count.frame, player.id.0,
+                );
+
                 // visual / sprite flipping
                 match moving_direction {
                     Direction::Left => sprite.flip_x = true,
@@ -422,7 +462,7 @@ pub fn player_move(
 
 pub fn moving_object_update(
     mut commands: Commands,
-    mut p: ParamSet<(
+    mut position_queries: ParamSet<(
         Query<(Entity, &mut Moving, &mut Position, &mut Transform)>,
         Query<&Position, Or<(With<Solid>, With<Item>, With<Player>)>>,
     )>,
@@ -433,9 +473,13 @@ pub fn moving_object_update(
         return;
     }
 
-    let impassable_positions: HashSet<Position> = p.p1().iter().copied().collect();
+    // TODO a bomb that is moving is also solid, so which position are we going to account for, before or after movement?
+    // what if two bombs are hitting each other directly?
+    // what if two bombs are hitting each other in a 90 degree angle?
+    // what if two bombs end up in the same spot (e.g. corner)?
+    let impassable_positions: HashSet<Position> = position_queries.p1().iter().copied().collect();
 
-    for (entity, mut moving, mut position, mut transform) in p.p0().iter_mut() {
+    for (entity, mut moving, mut position, mut transform) in position_queries.p0().iter_mut() {
         if frame_count.frame >= moving.next_move_frame {
             let new_position = position.offset(moving.direction, 1);
             if impassable_positions.get(&new_position).is_none() {
@@ -456,8 +500,8 @@ pub fn moving_object_update(
 pub fn pick_up_item(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
-    mut query: Query<(&mut Player, &Position, &mut BombSatchel), Without<Dead>>,
-    mut query2: Query<(Entity, &Item, &Position, &mut Handle<Image>)>,
+    mut alive_player_query: Query<(&mut Player, &Position, &mut BombSatchel), Without<Dead>>,
+    mut item_query: Query<(Entity, &Item, &Position, &mut Handle<Image>)>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -465,9 +509,9 @@ pub fn pick_up_item(
         return;
     }
 
-    for (item_entity, &item, &item_position, mut item_texture) in query2.iter_mut() {
+    for (item_entity, &item, &item_position, mut item_texture) in item_query.iter_mut() {
         let mut players_at_item_position =
-            query
+            alive_player_query
                 .iter_mut()
                 .filter_map(|(player, &player_position, bomb_satchel)| {
                     (player_position == item_position).then_some((player, bomb_satchel))
@@ -515,8 +559,8 @@ pub fn bomb_drop(
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     world_type: Res<WorldType>,
-    mut query: Query<(&Player, &Position, &mut BombSatchel), Without<Dead>>,
-    query2: Query<&Position, Or<(With<Solid>, With<BurningItem>)>>,
+    mut alive_player_query: Query<(&Player, &Position, &mut BombSatchel), Without<Dead>>,
+    invalid_bomb_position_query: Query<&Position, Or<(With<Solid>, With<BurningItem>)>>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -524,10 +568,11 @@ pub fn bomb_drop(
         return;
     }
 
-    for (player, position, mut bomb_satchel) in query.iter_mut() {
+    // TODO fix multiple players spawning a bomb in the same frame on the same position
+    for (player, position, mut bomb_satchel) in alive_player_query.iter_mut() {
         if inputs[player.id.0].0 .0 & INPUT_ACTION != 0
             && bomb_satchel.bombs_available > 0
-            && !query2.iter().any(|p| *p == *position)
+            && !invalid_bomb_position_query.iter().any(|p| *p == *position)
         {
             info!(
                 "[frame:{}] Player {} placed a bomb at position: {:?}",
@@ -609,15 +654,15 @@ pub fn bomb_drop(
 pub fn animate_fuse(
     frame_count: Res<FrameCount>,
     fonts: Res<Fonts>,
-    query: Query<&Bomb>,
-    mut query2: Query<(&Parent, &mut Text, &Fuse, &mut Transform)>,
+    bomb_query: Query<&Bomb>,
+    mut fuse_query: Query<(&Parent, &mut Text, &Fuse, &mut Transform)>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
     if game_freeze.is_some() {
         return;
     }
 
-    for (parent, mut text, fuse, mut transform) in query2.iter_mut() {
+    for (parent, mut text, fuse, mut transform) in fuse_query.iter_mut() {
         const FUSE_ANIMATION_FRAME_COUNT: usize = (FPS as f32 * 0.1) as usize;
         // TODO double check calculation
         let percent_left = (FUSE_ANIMATION_FRAME_COUNT
@@ -631,7 +676,7 @@ pub fn animate_fuse(
             _ => unreachable!(),
         };
 
-        let bomb = query.get(parent.get()).unwrap();
+        let bomb = bomb_query.get(parent.get()).unwrap();
         let percent_left = (bomb.expiration_frame - frame_count.frame) as f32
             / (bomb.expiration_frame - fuse.start_frame) as f32;
 
@@ -703,14 +748,14 @@ pub fn animate_fuse(
 pub fn fire_tick(
     mut commands: Commands,
     frame_count: Res<FrameCount>,
-    query: Query<(Entity, &Fire)>,
+    fire_query: Query<(Entity, &Fire)>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
     if game_freeze.is_some() {
         return;
     }
 
-    for (entity, fire) in query.iter() {
+    for (entity, fire) in fire_query.iter() {
         if frame_count.frame >= fire.expiration_frame {
             commands.entity(entity).despawn_recursive();
         }
@@ -721,7 +766,7 @@ pub fn crumbling_tick(
     mut commands: Commands,
     mut session_rng: ResMut<SessionRng>,
     frame_count: Res<FrameCount>,
-    query: Query<(Entity, &Crumbling, &Position)>,
+    crumbling_query: Query<(Entity, &Crumbling, &Position)>,
     game_textures: Res<GameTextures>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -729,7 +774,7 @@ pub fn crumbling_tick(
         return;
     }
 
-    for (entity, _, position) in query
+    for (entity, _, position) in crumbling_query
         .iter()
         .filter(|(_, c, _)| frame_count.frame >= c.expiration_frame)
         .sorted_unstable_by_key(|(_, _, &p)| p)
@@ -747,14 +792,14 @@ pub fn crumbling_tick(
 pub fn burning_item_tick(
     mut commands: Commands,
     frame_count: Res<FrameCount>,
-    query: Query<(Entity, &BurningItem)>,
+    burning_item_query: Query<(Entity, &BurningItem)>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
     if game_freeze.is_some() {
         return;
     }
 
-    for (entity, _) in query
+    for (entity, _) in burning_item_query
         .iter()
         .filter(|(_, bi)| frame_count.frame >= bi.expiration_frame)
     {
@@ -766,17 +811,17 @@ pub fn explode_bombs(
     mut commands: Commands,
     world_type: Res<WorldType>,
     game_textures: Res<GameTextures>,
-    mut p: ParamSet<(
-        Query<(Entity, &Bomb, &Position)>,
+    rollback_ordered: Res<RollbackOrdered>,
+    mut position_queries: ParamSet<(
+        Query<(&Rollback, Entity, &mut Bomb, &Position)>,
         Query<(Entity, &Position, Option<&Bomb>), With<Solid>>,
-        Query<(&mut Bomb, &Position)>,
     )>,
-    mut query3: Query<(&Player, &mut BombSatchel), Without<Dead>>,
-    mut query: Query<
+    mut alive_player_query: Query<(&Player, &mut BombSatchel), Without<Dead>>,
+    mut destructible_wall_query: Query<
         (Entity, &Position, &mut Handle<Image>, Option<&Crumbling>),
         (With<Wall>, With<Destructible>),
     >,
-    query2: Query<(Entity, &Position), With<Fire>>,
+    fire_query: Query<(&Rollback, Entity, &Position), With<Fire>>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -784,11 +829,11 @@ pub fn explode_bombs(
         return;
     }
 
-    let fireproof_positions: HashSet<Position> = p
+    let fireproof_positions: HashSet<Position> = position_queries
         .p1()
         .iter()
         .filter_map(|(_, p, b)| {
-            // ignore bombs that went off
+            // ignore bombs that are currently exploding
             if !matches!(b, Some(b) if  frame_count.frame >= b.expiration_frame) {
                 Some(p)
             } else {
@@ -798,87 +843,100 @@ pub fn explode_bombs(
         .copied()
         .collect();
 
-    let v: Vec<(Entity, Bomb, Position)> = p
-        .p0()
+    let mut fire_touched_positions = HashSet::new();
+    let spawn_fire = |commands: &mut Commands, position: Position| {
+        // remove previous fire at position if it exists
+        for (_, e, _) in fire_query.iter().filter(|(_, _, &p)| p == position) {
+            commands.entity(e).despawn_recursive();
+        }
+
+        commands
+            .spawn((
+                SpriteBundle {
+                    texture: game_textures.fire.clone(),
+                    transform: Transform::from_xyz(
+                        get_x(position.x),
+                        get_y(position.y),
+                        FIRE_Z_LAYER,
+                    ),
+                    sprite: Sprite {
+                        custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                Fire {
+                    expiration_frame: frame_count.frame + FPS / 2,
+                },
+                position,
+            ))
+            .add_rollback();
+    };
+
+    // sorting is needed to ensure fire spawn determinism
+    let tmp = position_queries.p0();
+    let exploding_bombs = tmp
         .iter()
-        .filter(|(_, b, _)| frame_count.frame >= b.expiration_frame)
-        .map(|t| (t.0, *t.1, *t.2))
-        .collect();
-    for (entity, bomb, position) in v {
+        .filter(|(_, _, b, _)| frame_count.frame >= b.expiration_frame)
+        .sorted_by_cached_key(|q| rollback_ordered.order(*q.0))
+        .map(|(_, e, &b, &p)| (e, b, p))
+        .collect_vec();
+    for (entity, bomb, position) in exploding_bombs {
         commands.entity(entity).despawn_recursive();
 
         if let Some(owner) = bomb.owner {
-            if let Some((_, mut bomb_satchel)) =
-                query3.iter_mut().find(|(player, _)| player.id == owner)
+            if let Some((_, mut bomb_satchel)) = alive_player_query
+                .iter_mut()
+                .find(|(player, _)| player.id == owner)
             {
                 bomb_satchel.bombs_available += 1;
             }
         }
 
-        let spawn_fire = |commands: &mut Commands, position: Position| {
-            // remove previous fire at position if it exists
-            for (e, _) in query2.iter().filter(|(_, &p)| p == position) {
-                commands.entity(e).despawn_recursive();
-            }
-
-            commands
-                .spawn((
-                    SpriteBundle {
-                        texture: game_textures.fire.clone(),
-                        transform: Transform::from_xyz(
-                            get_x(position.x),
-                            get_y(position.y),
-                            FIRE_Z_LAYER,
-                        ),
-                        sprite: Sprite {
-                            custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    },
-                    Fire {
-                        expiration_frame: frame_count.frame + FPS / 2,
-                    },
-                    position,
-                ))
-                .add_rollback();
-        };
-
-        spawn_fire(&mut commands, position);
+        if !fire_touched_positions.contains(&position) {
+            spawn_fire(&mut commands, position);
+            fire_touched_positions.insert(position);
+        }
         for direction in Direction::LIST {
-            for i in 1..=bomb.range {
-                let position = position.offset(direction, i);
-
+            for position in (1..=bomb.range).map(|i| position.offset(direction, i)) {
                 if fireproof_positions.contains(&position) {
-                    // bomb burn
-                    p.p2()
-                        .iter_mut()
-                        .filter(|(_, p)| **p == position)
-                        .for_each(|(mut b, _)| {
-                            b.expiration_frame = b
-                                .expiration_frame
-                                .min(frame_count.frame + BOMB_SHORTENED_FUSE_FRAME_COUNT);
-                        });
-
-                    // destructible wall burn
-                    for (e, _, mut t, perishable) in
-                        query.iter_mut().filter(|(_, p, _, _)| **p == position)
-                    {
-                        if perishable.is_none() {
-                            commands.entity(e).insert(Crumbling {
-                                expiration_frame: frame_count.frame + FPS / 2,
+                    if !fire_touched_positions.contains(&position) {
+                        // bomb burn
+                        position_queries
+                            .p0()
+                            .iter_mut()
+                            .filter(|(_, _, _, &bomb_position)| bomb_position == position)
+                            .for_each(|(_, _, mut bomb, _)| {
+                                bomb.expiration_frame = bomb
+                                    .expiration_frame
+                                    .min(frame_count.frame + BOMB_SHORTENED_FUSE_FRAME_COUNT);
                             });
-                            *t = game_textures
-                                .get_map_textures(*world_type)
-                                .burning_wall
-                                .clone();
-                        }
-                    }
 
+                        // destructible wall burn
+                        destructible_wall_query
+                            .iter_mut()
+                            .filter(|(_, &destructible_wall_position, _, crumbling)| {
+                                destructible_wall_position == position && crumbling.is_none()
+                            })
+                            .for_each(|(entity, _, mut texture, _)| {
+                                commands.entity(entity).insert(Crumbling {
+                                    expiration_frame: frame_count.frame + FPS / 2,
+                                });
+                                *texture = game_textures
+                                    .get_map_textures(*world_type)
+                                    .burning_wall
+                                    .clone();
+                            });
+
+                        fire_touched_positions.insert(position);
+                    }
                     break;
                 }
 
-                spawn_fire(&mut commands, position);
+                if !fire_touched_positions.contains(&position) {
+                    spawn_fire(&mut commands, position);
+                    fire_touched_positions.insert(position);
+                }
             }
         }
     }
@@ -886,8 +944,8 @@ pub fn explode_bombs(
 
 pub fn player_burn(
     mut commands: Commands,
-    query: Query<(Entity, &Player, &Position), Without<Dead>>,
-    query2: Query<&Position, With<Fire>>,
+    fire_query: Query<&Position, With<Fire>>,
+    alive_player_query: Query<(Entity, &Player, &Position), Without<Dead>>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -895,8 +953,8 @@ pub fn player_burn(
         return;
     }
 
-    let fire_positions: HashSet<Position> = query2.iter().copied().collect();
-    query
+    let fire_positions: HashSet<Position> = fire_query.iter().copied().collect();
+    alive_player_query
         .iter()
         .filter(|(_, _, position)| fire_positions.contains(*position))
         .for_each(|(entity, player, position)| {
@@ -911,8 +969,8 @@ pub fn player_burn(
 }
 
 pub fn bomb_burn(
-    mut query: Query<(&mut Bomb, &Position)>,
-    query2: Query<&Position, With<Fire>>,
+    fire_query: Query<&Position, With<Fire>>,
+    mut bomb_query: Query<(&mut Bomb, &Position)>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -920,8 +978,8 @@ pub fn bomb_burn(
         return;
     }
 
-    let fire_positions: HashSet<Position> = query2.iter().copied().collect();
-    query
+    let fire_positions: HashSet<Position> = fire_query.iter().copied().collect();
+    bomb_query
         .iter_mut()
         .filter(|(_, position)| fire_positions.contains(*position))
         .for_each(|(mut bomb, _)| {
@@ -934,8 +992,8 @@ pub fn bomb_burn(
 pub fn item_burn(
     mut commands: Commands,
     game_textures: Res<GameTextures>,
-    mut query: Query<(Entity, &Position, &mut Handle<Image>), With<Item>>,
-    query2: Query<&Position, With<Fire>>,
+    fire_query: Query<&Position, With<Fire>>,
+    mut item_query: Query<(Entity, &Position, &mut Handle<Image>), With<Item>>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -943,8 +1001,8 @@ pub fn item_burn(
         return;
     }
 
-    let fire_positions: HashSet<Position> = query2.iter().copied().collect();
-    query
+    let fire_positions: HashSet<Position> = fire_query.iter().copied().collect();
+    item_query
         .iter_mut()
         .filter(|(_, position, _)| fire_positions.contains(*position))
         .for_each(|(entity, _, mut texture)| {
@@ -964,9 +1022,9 @@ pub fn wall_of_death_update(
     wall_of_death: Option<ResMut<WallOfDeath>>,
     world_type: Res<WorldType>,
     map_size: Res<MapSize>,
-    query: Query<&Position, (With<Wall>, Without<Destructible>)>,
-    query2: Query<(Entity, &Position, Option<&Bomb>)>,
-    mut query3: Query<(&Player, &mut BombSatchel, Option<&Dead>)>,
+    indestructible_wall_query: Query<&Position, (With<Wall>, Without<Destructible>)>,
+    entity_query: Query<(Entity, &Position, Option<&Bomb>)>,
+    mut player_query: Query<(&Player, &mut BombSatchel, Option<&Dead>)>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
@@ -984,7 +1042,8 @@ pub fn wall_of_death_update(
             x: 3,
         };
 
-        let walls: HashSet<Position> = query.iter().copied().collect();
+        let indestructible_walls: HashSet<Position> =
+            indestructible_wall_query.iter().copied().collect();
         loop {
             if position == end_position {
                 break None;
@@ -1017,15 +1076,15 @@ pub fn wall_of_death_update(
             }
 
             position = position.offset(direction, 1);
-            if !walls.contains(&position) {
+            if !indestructible_walls.contains(&position) {
                 break Some((position, direction));
             }
         }
     };
 
     let mut clear_position_and_spawn_wall = |position: Position| {
-        for (entity, position, bomb) in query2.iter().filter(|(_, &p, _)| p == position) {
-            if let Ok((player, _, dead)) = query3.get(entity) {
+        for (entity, position, bomb) in entity_query.iter().filter(|(_, &p, _)| p == position) {
+            if let Ok((player, _, dead)) = player_query.get(entity) {
                 if dead.is_none() {
                     info!(
                         "[frame:{}] Player {} was crushed at position: {position:?}",
@@ -1037,11 +1096,12 @@ pub fn wall_of_death_update(
                 }
             } else {
                 commands.entity(entity).despawn_recursive();
-            }
 
-            if let Some(bomb) = bomb {
-                if let Some(owner) = bomb.owner {
-                    if let Some((_, mut bomb_satchel, _)) = query3
+                if let Some(&Bomb {
+                    owner: Some(owner), ..
+                }) = bomb
+                {
+                    if let Some((_, mut bomb_satchel, _)) = player_query
                         .iter_mut()
                         .filter(|(_, _, dead)| dead.is_none())
                         .find(|(&player, _, _)| player.id == owner)
@@ -1126,43 +1186,11 @@ pub fn wall_of_death_update(
     }
 }
 
-pub fn finish_round(
-    mut commands: Commands,
-    query: Query<&Player, Without<Dead>>,
-    frame_count: Res<FrameCount>,
-    game_end_frame: Option<Res<GameEndFrame>>,
-    game_freeze: Option<Res<GameFreeze>>,
-) {
-    if game_freeze.is_some() {
-        return;
-    }
-
-    let game_end_frame = game_end_frame.unwrap();
-
-    let round_outcome = if frame_count.frame >= game_end_frame.0 || query.iter().count() == 0 {
-        Some(RoundOutcome::Tie)
-    } else if let Ok(player) = query.get_single() {
-        Some(RoundOutcome::Winner(player.id))
-    } else {
-        None
-    };
-
-    if let Some(round_outcome) = round_outcome {
-        commands.insert_resource(GameFreeze {
-            end_frame: frame_count.frame + FPS, /* 1 second */
-            post_freeze_action: Some(PostFreezeAction::ShowLeaderboard(round_outcome)),
-        });
-    }
-}
-
 pub fn cleanup_dead(
     mut session_rng: ResMut<SessionRng>,
     mut commands: Commands,
-    query: Query<(Entity, &Dead)>,
-    frame_count: Res<FrameCount>,
-    game_textures: Res<GameTextures>,
-    map_size: Res<MapSize>,
-    query2: Query<
+    dead_entity_query: Query<(Entity, &Dead)>,
+    invalid_item_position_query: Query<
         &Position,
         Or<(
             With<Player>,
@@ -1172,18 +1200,22 @@ pub fn cleanup_dead(
             With<Item>,
         )>,
     >,
+    frame_count: Res<FrameCount>,
+    game_textures: Res<GameTextures>,
+    map_size: Res<MapSize>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
     if game_freeze.is_some() {
         return;
     }
 
-    for (e, d) in query.iter() {
+    for (e, d) in dead_entity_query.iter() {
         if frame_count.frame >= d.cleanup_frame {
             commands.entity(e).despawn_recursive();
 
             // death pinata
-            let invalid_positions: HashSet<Position> = query2.iter().copied().collect();
+            let invalid_item_positions: HashSet<Position> =
+                invalid_item_position_query.iter().copied().collect();
             let valid_positions = (1..map_size.rows - 1)
                 .flat_map(|y| {
                     (1..map_size.columns - 1).map(move |x| Position {
@@ -1191,7 +1223,7 @@ pub fn cleanup_dead(
                         x: x as isize,
                     })
                 })
-                .filter(|p| !invalid_positions.contains(p));
+                .filter(|position| !invalid_item_positions.contains(position));
             for position in valid_positions.choose_multiple(&mut session_rng.0, 3) {
                 generate_item_at_position(
                     &mut session_rng.0,
@@ -1204,6 +1236,36 @@ pub fn cleanup_dead(
     }
 }
 
+pub fn finish_round(
+    mut commands: Commands,
+    alive_player_query: Query<&Player, Without<Dead>>,
+    frame_count: Res<FrameCount>,
+    game_end_frame: Option<Res<GameEndFrame>>,
+    game_freeze: Option<Res<GameFreeze>>,
+) {
+    if game_freeze.is_some() {
+        return;
+    }
+
+    let game_end_frame = game_end_frame.unwrap();
+
+    let round_outcome =
+        if frame_count.frame >= game_end_frame.0 || alive_player_query.iter().count() == 0 {
+            Some(RoundOutcome::Tie)
+        } else if let Ok(player) = alive_player_query.get_single() {
+            Some(RoundOutcome::Winner(player.id))
+        } else {
+            None
+        };
+
+    if let Some(round_outcome) = round_outcome {
+        commands.insert_resource(GameFreeze {
+            end_frame: frame_count.frame + FPS, /* 1 second */
+            post_freeze_action: Some(PostFreezeAction::ShowLeaderboard(round_outcome)),
+        });
+    }
+}
+
 pub fn show_leaderboard(
     mut session_rng: ResMut<SessionRng>,
     mut commands: Commands,
@@ -1211,8 +1273,8 @@ pub fn show_leaderboard(
     fonts: Res<Fonts>,
     mut leaderboard: ResMut<Leaderboard>,
     game_freeze: Option<ResMut<GameFreeze>>,
-    primary_query: Query<&Window, With<PrimaryWindow>>,
-    query: Query<Entity, With<UIRoot>>,
+    primary_window_query: Query<&Window, With<PrimaryWindow>>,
+    ui_root_query: Query<Entity, With<UIRoot>>,
     frame_count: Res<FrameCount>,
 ) {
     if let Some(GameFreeze {
@@ -1239,20 +1301,22 @@ pub fn show_leaderboard(
                 }
             };
 
-            commands.entity(query.single()).with_children(|parent| {
-                let window = primary_query.get_single().unwrap();
+            commands
+                .entity(ui_root_query.single())
+                .with_children(|parent| {
+                    let window = primary_window_query.get_single().unwrap();
 
-                setup_leaderboard_display(
-                    &mut session_rng.0,
-                    parent,
-                    window.height(),
-                    window.width(),
-                    &game_textures,
-                    &fonts,
-                    &leaderboard,
-                    *round_outcome,
-                );
-            });
+                    setup_leaderboard_display(
+                        &mut session_rng.0,
+                        parent,
+                        window.height(),
+                        window.width(),
+                        &game_textures,
+                        &fonts,
+                        &leaderboard,
+                        *round_outcome,
+                    );
+                });
 
             commands.insert_resource(GameFreeze {
                 end_frame: frame_count.frame + LEADERBOARD_DISPLAY_FRAME_COUNT,
@@ -1271,8 +1335,8 @@ pub fn show_tournament_winner(
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     mut world_type: ResMut<WorldType>,
-    primary_query: Query<&Window, With<PrimaryWindow>>,
-    query: Query<Entity, With<LeaderboardUIContent>>,
+    primary_window_query: Query<&Window, With<PrimaryWindow>>,
+    leaderboard_ui_content_query: Query<Entity, With<LeaderboardUIContent>>,
 ) {
     if let Some(GameFreeze {
         end_frame: freeze_end_frame,
@@ -1284,10 +1348,10 @@ pub fn show_tournament_winner(
 
             // clear the leaderboard display and setup the tournament winner display
             commands
-                .entity(query.single())
+                .entity(leaderboard_ui_content_query.single())
                 .despawn_descendants()
                 .with_children(|parent| {
-                    let window = primary_query.get_single().unwrap();
+                    let window = primary_window_query.get_single().unwrap();
                     setup_tournament_winner_display(
                         parent,
                         window.height(),
@@ -1321,7 +1385,7 @@ pub fn start_new_round(
     mut commands: Commands,
     game_freeze: Option<Res<GameFreeze>>,
     frame_count: Res<FrameCount>,
-    query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
+    teardown_entities_query: Query<Entity, (Without<Window>, Without<Camera2d>)>,
     map_size: Res<MapSize>,
     world_type: Res<WorldType>,
     matchbox_config: Res<MatchboxConfig>,
@@ -1336,8 +1400,7 @@ pub fn start_new_round(
     {
         if frame_count.frame >= *freeze_end_frame {
             // clear game state
-            for e in query.iter() {
-                // TODO should everything be rollbackable now?
+            for e in teardown_entities_query.iter() {
                 commands.entity(e).despawn();
             }
 

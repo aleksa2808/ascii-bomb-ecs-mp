@@ -30,7 +30,7 @@ pub enum AppState {
     WebReadyToStart,
     Lobby,
     InGame,
-    Invalid,
+    Error,
 }
 
 impl Default for AppState {
@@ -137,9 +137,7 @@ pub fn run() {
         .rollback_resource_with_clone::<SessionRng>()
         .rollback_resource_with_copy::<FrameCount>()
         .rollback_resource_with_copy::<WallOfDeath>()
-        // TODO not sure if this is necessary
         .rollback_resource_with_copy::<GameFreeze>()
-        // TODO what if two items are switched, is their order also hashed?
         .checksum_component_with_hash::<Player>()
         .checksum_component_with_hash::<Position>()
         .checksum_component_with_hash::<BombSatchel>()
@@ -191,9 +189,9 @@ pub fn run() {
                     apply_deferred,
                     wall_of_death_update,
                     apply_deferred,
-                    finish_round,
-                    apply_deferred,
                     cleanup_dead,
+                    apply_deferred,
+                    finish_round,
                 )
                     .chain(),
             )
