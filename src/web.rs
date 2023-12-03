@@ -53,15 +53,6 @@ pub enum InputAction {
     Left,
     Right,
     Space,
-    W,
-    S,
-    A,
-    D,
-    G,
-    Return,
-    Escape,
-    Back,
-    F,
 }
 
 pub fn web_input(
@@ -92,15 +83,6 @@ pub fn web_input(
                     2 => Some(InputAction::Left),
                     3 => Some(InputAction::Right),
                     4 => Some(InputAction::Space),
-                    5 => Some(InputAction::W),
-                    6 => Some(InputAction::S),
-                    7 => Some(InputAction::A),
-                    8 => Some(InputAction::D),
-                    9 => Some(InputAction::G),
-                    10 => Some(InputAction::Return),
-                    11 => Some(InputAction::Escape),
-                    12 => Some(InputAction::Back),
-                    13 => Some(InputAction::F),
                     _ => None,
                 } {
                     match input_action {
@@ -119,7 +101,6 @@ pub fn web_input(
                         InputAction::Space => {
                             web_input |= INPUT_ACTION;
                         }
-                        _ => (),
                     }
                 }
             }
