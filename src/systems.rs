@@ -400,7 +400,6 @@ pub fn player_move(
 
         // there must only be one solid per position
         // if there are multiple bombs on the same position only one would get updated which could lead to a desync
-        // TODO maybe add a global game rules checking system
         assert!(
             previous_item.is_none(),
             "Multiple solid objects on position {p:?}!"
