@@ -3,25 +3,25 @@
         font-size: 12px;
     }
 }
- 
+
 @media (min-width: 780px) {
     html {
         font-size: 11px;
     }
 }
- 
+
 @media (min-width: 702px) {
     html {
         font-size: 10px;
     }
 }
- 
+
 @media (min-width: 624px) {
     html {
         font-size: 9px;
     }
 }
- 
+
 @media (max-width: 623px) {
     html {
         font-size: 8px;
@@ -33,13 +33,18 @@ body {
     height: 100%;
 
     /* disable text selection */
-    -webkit-touch-callout: none;    /* iOS Safari */
-    -webkit-user-select: none;      /* Safari */
-    -khtml-user-select: none;       /* Konqueror HTML */
-    -moz-user-select: none;         /* Old versions of Firefox */
-    -ms-user-select: none;          /* Internet Explorer/Edge */
-    user-select: none;              /* Non-prefixed version, currently
-                                        supported by Chrome, Edge, Opera and Firefox */
+    /* iOS Safari */
+    -webkit-touch-callout: none;
+    /* Safari */
+    -webkit-user-select: none;
+    /* Konqueror HTML */
+    -khtml-user-select: none;
+    /* Old versions of Firefox */
+    -moz-user-select: none;
+    /* Internet Explorer/Edge */
+    -ms-user-select: none;
+    /* Non-prefixed version, currently supported by Chrome, Edge, Opera and Firefox */
+    user-select: none;
 }
 
 body {
@@ -53,6 +58,16 @@ body {
     justify-content: center;
     text-align: center;
     display: flex;
+}
+
+label {
+    color: white;
+    font-size: 2rem;
+    margin-right: 0.8rem;
+}
+
+input {
+    font-size: 2rem;
 }
 
 a {
@@ -71,8 +86,10 @@ a {
     color: white;
     cursor: pointer;
     display: flex;
-    justify-content: center; /* align horizontal */
-    align-items: center; /* align vertical */
+    /* align horizontal */
+    justify-content: center;
+    /* align vertical */
+    align-items: center;
     font-size: 2.5em;
     margin: 1rem;
     padding: 0.5rem;
@@ -92,8 +109,10 @@ a {
     color: white;
     cursor: pointer;
     display: flex;
-    justify-content: center; /* align horizontal */
-    align-items: center; /* align vertical */
+    /* align horizontal */
+    justify-content: center;
+    /* align vertical */
+    align-items: center;
     font-size: 2.5rem;
     margin: 1rem;
     padding: 0.5rem;
@@ -113,8 +132,10 @@ a {
     color: white;
     cursor: pointer;
     display: flex;
-    justify-content: center; /* align horizontal */
-    align-items: center; /* align vertical */
+    /* align horizontal */
+    justify-content: center;
+    /* align vertical */
+    align-items: center;
     font-size: 2.5rem;
     margin: 1rem;
     padding: 0.5rem;
@@ -173,7 +194,7 @@ a {
     margin: auto;
     position: relative;
     display: grid;
-	grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+    grid-template: repeat(3, 1fr) / repeat(3, 1fr);
 }
 
 .btn-big {

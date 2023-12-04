@@ -16,7 +16,7 @@ use bevy_ggrs::prelude::*;
 use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-use crate::web::{web_input, web_ready_to_start_update};
+use crate::web::*;
 use crate::{components::*, constants::FPS, resources::*, systems::*, types::GgrsConfig};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::{
@@ -97,10 +97,11 @@ pub fn run() {
     });
 
     #[cfg(target_arch = "wasm32")]
-    app.add_systems(
-        Update,
-        web_ready_to_start_update.run_if(in_state(AppState::WebReadyToStart)),
-    );
+    app.add_systems(OnEnter(AppState::WebReadyToStart), web_ready_to_start_enter)
+        .add_systems(
+            Update,
+            web_ready_to_start_update.run_if(in_state(AppState::WebReadyToStart)),
+        );
 
     #[cfg(target_arch = "wasm32")]
     let input_fn = web_input;

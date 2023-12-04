@@ -32,6 +32,18 @@ pub fn set_input_active(input: u8) {
     inputs.push_front(input);
 }
 
+// callable JavaScript functions
+#[wasm_bindgen(module = "/src/wasm_callables.js")]
+extern "C" {
+    pub fn doneLoading();
+}
+
+// web-specific systems
+pub fn web_ready_to_start_enter() {
+    // TODO: would it be better to do this through web-sys?
+    doneLoading();
+}
+
 pub fn web_ready_to_start_update(
     mut commands: Commands,
     mut next_state: ResMut<NextState<AppState>>,
