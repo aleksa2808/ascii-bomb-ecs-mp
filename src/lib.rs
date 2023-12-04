@@ -146,7 +146,7 @@ pub fn run() {
         .add_systems(
             GgrsSchedule,
             // list too long for one chain
-            // TODO prune apply_deferred calls
+            // TODO not sure if this many apply_deferred is very idiomatic Bevy
             (
                 (
                     increase_frame_system,
@@ -183,6 +183,9 @@ pub fn run() {
                     animate_fuse,
                     player_burn,
                     apply_deferred,
+                )
+                    .chain(),
+                (
                     bomb_burn,
                     apply_deferred,
                     item_burn,
@@ -191,6 +194,7 @@ pub fn run() {
                     apply_deferred,
                     cleanup_dead,
                     apply_deferred,
+                    check_game_rules,
                     finish_round,
                 )
                     .chain(),

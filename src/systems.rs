@@ -1308,6 +1308,22 @@ pub fn cleanup_dead(
     }
 }
 
+pub fn check_game_rules(
+    solid_object_query: Query<&Position, With<Solid>>,
+    fire_query: Query<&Position, With<Fire>>,
+    item_query: Query<&Position, With<Item>>,
+) {
+    for position in solid_object_query.iter().duplicates() {
+        warn!("Multiple solid objects at position: {position:?}");
+    }
+    for position in fire_query.iter().duplicates() {
+        warn!("Multiple fires at position: {position:?}");
+    }
+    for position in item_query.iter().duplicates() {
+        warn!("Multiple items at position: {position:?}");
+    }
+}
+
 pub fn finish_round(
     mut commands: Commands,
     alive_player_query: Query<&Player, Without<Dead>>,
