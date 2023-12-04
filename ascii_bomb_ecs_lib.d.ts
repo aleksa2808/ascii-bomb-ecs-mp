@@ -1,9 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
-*/
-export function run(): void;
-/**
 * @param {string} signal_server_address
 * @param {number} number_of_players
 */
@@ -12,14 +9,17 @@ export function start_game(signal_server_address: string, number_of_players: num
 * @param {number} input
 */
 export function set_input_active(input: number): void;
+/**
+*/
+export function run(): void;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly run: () => void;
   readonly start_game: (a: number, b: number, c: number) => void;
   readonly set_input_active: (a: number) => void;
+  readonly run: () => void;
   readonly wgpu_compute_pass_set_pipeline: (a: number, b: number) => void;
   readonly wgpu_compute_pass_set_bind_group: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly wgpu_compute_pass_set_push_constant: (a: number, b: number, c: number, d: number) => void;
