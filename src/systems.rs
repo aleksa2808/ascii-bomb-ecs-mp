@@ -460,11 +460,21 @@ pub fn player_move(
     }
 }
 
-pub fn moving_object_update(
+pub fn bomb_move(
     mut commands: Commands,
+    rollback_ordered: Res<RollbackOrdered>,
     mut position_queries: ParamSet<(
-        Query<(Entity, &mut Moving, &mut Position, &mut Transform)>,
-        Query<&Position, Or<(With<Solid>, With<Item>, With<Player>)>>,
+        Query<
+            (
+                &Rollback,
+                Entity,
+                &mut Moving,
+                &mut Position,
+                &mut Transform,
+            ),
+            With<Bomb>,
+        >,
+        Query<&Position, (Without<Moving>, Or<(With<Solid>, With<Item>, With<Player>)>)>,
     )>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
@@ -473,26 +483,75 @@ pub fn moving_object_update(
         return;
     }
 
-    // TODO a bomb that is moving is also solid, so which position are we going to account for, before or after movement?
-    // what if two bombs are hitting each other directly?
-    // what if two bombs are hitting each other in a 90 degree angle?
-    // what if two bombs end up in the same spot (e.g. corner)?
-    let impassable_positions: HashSet<Position> = position_queries.p1().iter().copied().collect();
+    let mut static_impassable_object_positions: HashSet<Position> = {
+        let positions_of_moving_bombs_not_ready_to_move = position_queries
+            .p0()
+            .iter()
+            .filter(|(_, _, m, _, _)| frame_count.frame < m.next_move_frame)
+            .map(|(_, _, _, &p, _)| p)
+            .collect_vec();
 
-    for (entity, mut moving, mut position, mut transform) in position_queries.p0().iter_mut() {
-        if frame_count.frame >= moving.next_move_frame {
-            let new_position = position.offset(moving.direction, 1);
-            if impassable_positions.get(&new_position).is_none() {
-                *position = new_position;
+        position_queries
+            .p1()
+            .iter()
+            .copied()
+            .chain(positions_of_moving_bombs_not_ready_to_move)
+            .collect()
+    };
+    let mut positions_of_bombs_ready_to_move: HashSet<Position> = position_queries
+        .p0()
+        .iter()
+        .filter(|(_, _, m, _, _)| frame_count.frame >= m.next_move_frame)
+        .map(|(_, _, _, &p, _)| p)
+        .collect();
+
+    // all moving bombs that are ready to move this frame
+    // bomb sorting is needed to ensure movement determinism
+    let mut tmp = position_queries.p0();
+    let mut moving_bombs_left_to_check = tmp
+        .iter_mut()
+        .filter(|(_, _, moving, _, _)| frame_count.frame >= moving.next_move_frame)
+        .sorted_by_cached_key(|q| rollback_ordered.order(*q.0))
+        .collect_vec();
+
+    loop {
+        let moving_bombs = moving_bombs_left_to_check;
+        moving_bombs_left_to_check = vec![];
+        let mut bombs_moved = false;
+
+        for moving_bomb in moving_bombs {
+            let moving_bomb_entity = moving_bomb.1;
+            let current_position = *moving_bomb.3;
+            let next_position = current_position.offset(moving_bomb.2.direction, 1);
+            if static_impassable_object_positions.contains(&next_position) {
+                // hit an impassable object, stop moving the bomb
+                commands.entity(moving_bomb_entity).remove::<Moving>();
+                positions_of_bombs_ready_to_move.remove(&current_position);
+                static_impassable_object_positions.insert(current_position);
+            } else if positions_of_bombs_ready_to_move.contains(&next_position) {
+                // a bomb that is about to move is blocking the way, check again later
+                moving_bombs_left_to_check.push(moving_bomb);
+            } else {
+                // the way is clear, move the bomb
+                let (_, _, mut moving, mut position, mut transform) = moving_bomb;
+
+                *position = next_position;
 
                 let translation = &mut transform.translation;
                 translation.x = get_x(position.x);
                 translation.y = get_y(position.y);
 
                 moving.next_move_frame += moving.frame_interval;
-            } else {
-                commands.entity(entity).remove::<Moving>();
+
+                positions_of_bombs_ready_to_move.remove(&current_position);
+                static_impassable_object_positions.insert(next_position);
+                bombs_moved = true;
             }
+        }
+
+        // stop iterating if there are no more objects which should move this frame or if we couldn't move any more objects in this iteration (objects trying to move into one another)
+        if moving_bombs_left_to_check.is_empty() || !bombs_moved {
+            break;
         }
     }
 }

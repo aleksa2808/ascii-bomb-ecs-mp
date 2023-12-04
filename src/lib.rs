@@ -163,7 +163,7 @@ pub fn run() {
                     apply_deferred,
                     player_move,
                     apply_deferred,
-                    moving_object_update,
+                    bomb_move,
                     apply_deferred,
                     pick_up_item,
                     apply_deferred,
