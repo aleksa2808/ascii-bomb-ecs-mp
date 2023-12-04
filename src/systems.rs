@@ -554,12 +554,14 @@ pub fn pick_up_item(
 }
 
 pub fn bomb_drop(
+    mut session_rng: ResMut<SessionRng>,
     mut commands: Commands,
     inputs: Res<PlayerInputs<GgrsConfig>>,
     game_textures: Res<GameTextures>,
     fonts: Res<Fonts>,
     world_type: Res<WorldType>,
-    mut alive_player_query: Query<(&Player, &Position, &mut BombSatchel), Without<Dead>>,
+    rollback_ordered: Res<RollbackOrdered>,
+    mut alive_player_query: Query<(&Rollback, &Player, &Position, &mut BombSatchel), Without<Dead>>,
     invalid_bomb_position_query: Query<&Position, Or<(With<Solid>, With<BurningItem>)>>,
     frame_count: Res<FrameCount>,
     game_freeze: Option<Res<GameFreeze>>,
@@ -568,11 +570,20 @@ pub fn bomb_drop(
         return;
     }
 
-    // TODO fix multiple players spawning a bomb in the same frame on the same position
-    for (player, position, mut bomb_satchel) in alive_player_query.iter_mut() {
+    let mut invalid_bomb_positions: HashSet<Position> =
+        invalid_bomb_position_query.iter().copied().collect();
+
+    // player sorting is needed to ensure determinism of spawning bombs
+    let mut players = alive_player_query
+        .iter_mut()
+        .sorted_by_cached_key(|q| rollback_ordered.order(*q.0))
+        .collect_vec();
+    // shuffle to ensure fairness in situations where two players try to place a bomb in the same frame
+    players.shuffle(&mut session_rng.0);
+    for (_, player, position, mut bomb_satchel) in players {
         if inputs[player.id.0].0 .0 & INPUT_ACTION != 0
             && bomb_satchel.bombs_available > 0
-            && !invalid_bomb_position_query.iter().any(|p| *p == *position)
+            && !invalid_bomb_positions.contains(position)
         {
             info!(
                 "[frame:{}] Player {} placed a bomb at position: {:?}",
@@ -647,6 +658,8 @@ pub fn bomb_drop(
                         ))
                         .add_rollback();
                 });
+
+            invalid_bomb_positions.insert(*position);
         }
     }
 }
