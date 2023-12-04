@@ -7,7 +7,6 @@ async function start_wasm() {
 
     try {
         run();
-        // TODO: enable start game button
     } catch (e) {
         // the winit crate throws an exception for control flow, which should be ignored
         if (!e.message.includes("This isn't actually an error!")) {
@@ -116,13 +115,13 @@ function startGame() {
 
     // Validate web address input
     if (signal_server_address.trim() === "") {
-        alert("Please enter a web address.");
+        alert("Please enter a Matchbox server address.");
         return;
     }
 
     // Validate number input
     if (number_of_players < 2 || number_of_players > 8) {
-        alert("Please enter a number between 2 and 8.");
+        alert("Please enter a player count between 2 and 8.");
         return;
     }
 
