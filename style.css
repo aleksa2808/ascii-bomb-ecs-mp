@@ -80,6 +80,12 @@ input[type=checkbox] {
     display: none;
 }
 
+#button-start,
+#button-loading {
+    width: 24rem;
+    margin: 0 auto;
+}
+
 a {
     color: white;
     display: block;
@@ -106,8 +112,7 @@ a {
     padding-left: 15px;
     padding-right: 15px;
     text-transform: uppercase;
-    width: 9em;
-    margin: 0 auto;
+    width: auto;
 }
 
 .btn:focus {
@@ -130,8 +135,7 @@ a {
     padding-left: 15px;
     padding-right: 15px;
     text-transform: uppercase;
-    width: 9em;
-    margin: 0 auto;
+    width: auto;
 }
 
 .btn:hover {
@@ -154,8 +158,7 @@ a {
     padding-left: 15px;
     padding-right: 15px;
     text-transform: uppercase;
-    width: 9em;
-    margin: 0 auto;
+    width: auto;
 }
 
 .btn.grey {
