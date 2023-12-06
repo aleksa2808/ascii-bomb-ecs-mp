@@ -18,12 +18,33 @@
 <body>
     <div id="button-box">
         <form>
-            <label for="urlInput">Matchbox server:</label>
-            <input type="text" id="urlInput" name="url" value="wss://match-0-6.helsing.studio" required>
-            <br><br>
             <label for="numberInput">Number of players:</label>
             <input type="number" id="numberInput" name="number" min="2" max="8" value="2" required>
             <br><br>
+            <label for="customMatchboxServerCheckbox">Custom Matchbox server:</label>
+            <input type="checkbox" id="customMatchboxServerCheckbox" name="customMatchboxServer"
+                onclick="toggleCustomMatchboxServerSettings()">
+            <br><br>
+            <div id="matchboxServerSettings">
+                <label for="matchboxServerURL" id="matchboxServerURLLabel">Matchbox server URL:</label>
+                <input type="text" id="matchboxServerURL" name="matchboxServerURL" value="">
+                <br><br>
+            </div>
+            <label for="customICEServerCheckbox">Custom ICE server:</label>
+            <input type="checkbox" id="customICEServerCheckbox" name="customICEServer"
+                onclick="toggleCustomICEServerSettings()">
+            <br><br>
+            <div id="ICEServerSettings">
+                <label for="iceServerURL">STUN/TURN server URL:</label>
+                <input type="text" id="iceServerURL" name="iceServerURL" value="">
+                <br><br>
+                <label for="iceServerUsername">TURN server username:</label>
+                <input type="text" id="iceServerUsername" name="iceServerUsername" value="">
+                <br><br>
+                <label for="iceServerCredential">TURN server credential:</label>
+                <input type="text" id="iceServerCredential" name="iceServerCredential" value="">
+                <br><br>
+            </div>
             <a id="button-loading" class="btn grey">Loading...</a>
             <a id="button-start" class="btn" onclick="startGame()" hidden>Start game</a>
         </form>
