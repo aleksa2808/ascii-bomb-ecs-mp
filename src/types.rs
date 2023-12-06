@@ -16,6 +16,12 @@ impl Config for GgrsConfig {
     type Address = PeerId;
 }
 
+pub struct ICEServerConfig {
+    pub url: String,
+    pub username: Option<String>,
+    pub credential: Option<String>,
+}
+
 #[derive(Clone, Copy)]
 pub struct RGBColor(pub u8, pub u8, pub u8);
 

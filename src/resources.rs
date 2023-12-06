@@ -5,7 +5,7 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 use crate::{
     components::Position,
     constants::COLORS,
-    types::{Direction, PlayerID, PostFreezeAction},
+    types::{Direction, ICEServerConfig, PlayerID, PostFreezeAction},
 };
 
 #[derive(Resource)]
@@ -181,9 +181,10 @@ impl WorldType {
 
 #[derive(Resource)]
 pub struct MatchboxConfig {
-    pub signal_server_address: String,
-    pub room: Option<String>,
     pub number_of_players: usize,
+    pub matchbox_server_url: Option<String>,
+    pub room: Option<String>,
+    pub ice_server_config: Option<ICEServerConfig>,
 }
 
 #[derive(Resource)]

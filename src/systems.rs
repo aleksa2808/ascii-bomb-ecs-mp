@@ -110,16 +110,26 @@ pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<Matchb
         ),
     };
 
-    let room_url = format!("{}/{}", &matchbox_config.signal_server_address, room_id);
+    let matchbox_server_url = match matchbox_config.matchbox_server_url.clone() {
+        Some(url) => url,
+        None => "wss://match-0-6.helsing.studio".to_string(),
+    };
+
+    let room_url = format!("{}/{}", matchbox_server_url, room_id);
     info!("Connecting to the matchbox server: {room_url:?}");
+
+    let rtc_ice_server_config = match &matchbox_config.ice_server_config {
+        Some(config) => RtcIceServerConfig { urls: vec![config.url.clone()], username: config.username.clone(), credential: config.credential.clone() },
+        None => RtcIceServerConfig {
+            urls: vec![decode("dHVybjpldS10dXJuNy54aXJzeXMuY29tOjM0Nzg/dHJhbnNwb3J0PXVkcA")],
+            username: Some(decode("UENMWW5yLWpYZjRZd1VPRDFBR1pxdHVpQzRZeEZFenlJVi10X09LTmxQUG9qbkN6UG5BeXVHVUdDZ2hQTEVfa0FBQUFBR1ZTU21oaGJHVnJjMkV5T0RBNA")),
+            credential: Some(decode("MjI0ZDdhZmEtODIzZi0xMWVlLWFlODMtMDI0MmFjMTQwMDA0")),
+        },
+    };
 
     commands.insert_resource(MatchboxSocket::from(
         WebRtcSocketBuilder::new(room_url)
-            .ice_server(RtcIceServerConfig {
-                urls: vec![decode("dHVybjpldS10dXJuNy54aXJzeXMuY29tOjM0Nzg/dHJhbnNwb3J0PXVkcA")],
-                username: Some(decode("UENMWW5yLWpYZjRZd1VPRDFBR1pxdHVpQzRZeEZFenlJVi10X09LTmxQUG9qbkN6UG5BeXVHVUdDZ2hQTEVfa0FBQUFBR1ZTU21oaGJHVnJjMkV5T0RBNA")),
-                credential: Some(decode("MjI0ZDdhZmEtODIzZi0xMWVlLWFlODMtMDI0MmFjMTQwMDA0")),
-            })
+            .ice_server(rtc_ice_server_config)
             .add_ggrs_channel()
             .add_reliable_channel()
             .build(),

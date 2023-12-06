@@ -109,23 +109,76 @@ document.addEventListener('dblclick', function (event) {
     event.preventDefault();
 }, { passive: false });
 
-function startGame() {
-    var signal_server_address = document.getElementById("urlInput").value;
-    var number_of_players = parseInt(document.getElementById("numberInput").value);
+function toggleCustomMatchboxServerSettings() {
+    var checkbox = document.getElementById("customMatchboxServerCheckbox");
+    var settings = document.getElementById("matchboxServerSettings");
 
-    // Validate web address input
-    if (signal_server_address.trim() === "") {
-        alert("Please enter a Matchbox server address.");
-        return;
+    if (checkbox.checked == true) {
+        settings.style.display = "block";
+    } else {
+        settings.style.display = "none";
     }
+}
+window.toggleCustomMatchboxServerSettings = toggleCustomMatchboxServerSettings
 
-    // Validate number input
+function toggleCustomICEServerSettings() {
+    var checkbox = document.getElementById("customICEServerCheckbox");
+    var settings = document.getElementById("ICEServerSettings");
+
+    if (checkbox.checked == true) {
+        settings.style.display = "block";
+    } else {
+        settings.style.display = "none";
+    }
+}
+window.toggleCustomICEServerSettings = toggleCustomICEServerSettings
+
+function startGame() {
+    var number_of_players = parseInt(document.getElementById("numberInput").value);
+    var use_custom_matchbox_server_settings = document.getElementById('customMatchboxServerCheckbox').checked;
+    var matchbox_server_url = "";
+    var use_custom_ice_server_settings = document.getElementById('customICEServerCheckbox').checked;
+    var ice_server_url = "";
+    var turn_server_username = "";
+    var turn_server_credential = "";
+
+    // Validate player count input
     if (number_of_players < 2 || number_of_players > 8) {
         alert("Please enter a player count between 2 and 8.");
         return;
     }
 
-    console.log(signal_server_address, number_of_players);
+    // Validate custom Matchbox server settings
+    if (use_custom_matchbox_server_settings == true) {
+        matchbox_server_url = document.getElementById("matchboxServerURL").value;
+
+        if (matchbox_server_url.trim() === "") {
+            alert("Please enter a Matchbox server URL.");
+            return;
+        }
+    }
+
+    // Validate custom ICE server settings
+    if (use_custom_ice_server_settings == true) {
+        ice_server_url = document.getElementById("iceServerURL").value;
+        turn_server_username = document.getElementById("iceServerUsername").value;
+        turn_server_credential = document.getElementById("iceServerCredential").value;
+
+        if (ice_server_url.trim() === "") {
+            alert("Please enter a STUN/TURN server URL.");
+            return;
+        }
+    }
+
+    console.log("Number of players: " + number_of_players);
+    if (use_custom_matchbox_server_settings) {
+        console.log("Matchbox server URL: " + matchbox_server_url);
+    }
+    if (use_custom_ice_server_settings) {
+        console.log("STUN/TURN server URL: " + ice_server_url);
+        console.log("TURN server username: " + turn_server_username);
+        console.log("TURN server credential: " + turn_server_credential);
+    }
 
     document.getElementById('button-box').remove();
     document.getElementById('game-container').removeAttribute("hidden");
@@ -159,7 +212,7 @@ function startGame() {
     updateCanvasContainerSize();
 
     canvas.focus();
-    start_game(signal_server_address, number_of_players);
+    start_game(number_of_players, matchbox_server_url, ice_server_url, turn_server_username, turn_server_credential);
 }
 window.startGame = startGame
 

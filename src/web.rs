@@ -9,20 +9,38 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use crate::{
     constants::{INPUT_ACTION, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP},
     resources::{GameFreeze, MatchboxConfig},
-    types::{GgrsConfig, PlayerInput},
+    types::{GgrsConfig, ICEServerConfig, PlayerInput},
     AppState,
 };
 
-static START: Lazy<RwLock<Option<(String, usize)>>> = Lazy::new(|| RwLock::new(None));
+static START: Lazy<RwLock<Option<(usize, String, String, String, String)>>> =
+    Lazy::new(|| RwLock::new(None));
 static INPUTS: Lazy<RwLock<VecDeque<u8>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
 
 // functions callable from JavaScript
 #[wasm_bindgen]
 #[allow(dead_code)]
-pub fn start_game(signal_server_address: &str, number_of_players: usize) {
-    info!("start_game: {signal_server_address} {number_of_players}");
+pub fn start_game(
+    number_of_players: usize,
+    matchbox_server_url: &str,
+    ice_server_url: &str,
+    turn_server_username: &str,
+    turn_server_credential: &str,
+) {
+    info!("start_game configs:");
+    info!("player count: {number_of_players}");
+    info!("matchbox server url: {matchbox_server_url}");
+    info!("stun/turn server url: {ice_server_url}");
+    info!("turn server username: {turn_server_username}");
+    info!("turn server credential: {turn_server_credential}");
     let mut start = START.write();
-    *start = Some((signal_server_address.to_string(), number_of_players));
+    *start = Some((
+        number_of_players,
+        matchbox_server_url.to_string(),
+        ice_server_url.to_string(),
+        turn_server_username.to_string(),
+        turn_server_credential.to_string(),
+    ));
 }
 
 #[wasm_bindgen]
@@ -48,11 +66,46 @@ pub fn web_ready_to_start_update(
     mut commands: Commands,
     mut next_state: ResMut<NextState<AppState>>,
 ) {
-    if let Some((signal_server_address, number_of_players)) = START.read().clone() {
+    if let Some((
+        number_of_players,
+        matchbox_server_url,
+        ice_server_url,
+        turn_server_username,
+        turn_server_credential,
+    )) = START.read().clone()
+    {
+        let matchbox_server_url = if !matchbox_server_url.trim().is_empty() {
+            Some(matchbox_server_url)
+        } else {
+            None
+        };
+
+        let ice_server_config = if !ice_server_url.trim().is_empty() {
+            let username = if !turn_server_username.trim().is_empty() {
+                Some(turn_server_username)
+            } else {
+                None
+            };
+            let credential = if !turn_server_credential.trim().is_empty() {
+                Some(turn_server_credential)
+            } else {
+                None
+            };
+
+            Some(ICEServerConfig {
+                url: ice_server_url,
+                username,
+                credential,
+            })
+        } else {
+            None
+        };
+
         commands.insert_resource(MatchboxConfig {
-            signal_server_address,
-            room: None,
             number_of_players,
+            matchbox_server_url,
+            room: None,
+            ice_server_config,
         });
         next_state.set(AppState::Lobby);
     }
