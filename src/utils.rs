@@ -17,7 +17,7 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 use crate::{
     components::{
         BombSatchel, BurningItem, Destructible, FullscreenMessageText, GameTimerDisplay, HUDRoot,
-        Item, LeaderboardUIContent, LeaderboardUIRoot, Player, PlayerPortrait,
+        Item, LeaderboardUIContent, LeaderboardUIRoot, NetworkStatsDisplay, Player, PlayerPortrait,
         PlayerPortraitDisplay, Position, Solid, UIComponent, UIRoot, Wall,
     },
     constants::{
@@ -260,6 +260,68 @@ fn init_hud(
                         },
                         UIComponent,
                         GameTimerDisplay,
+                    ));
+                });
+
+            // network stats
+            parent
+                .spawn((
+                    NodeBundle {
+                        style: Style {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(width - 6.0 * PIXEL_SCALE as f32),
+                            top: Val::Px(0.0),
+                            width: Val::Px(6.0 * PIXEL_SCALE as f32),
+                            height: Val::Px(2.0 * ((1 + player_ids.len()) * PIXEL_SCALE) as f32),
+                            ..Default::default()
+                        },
+                        background_color: hud_colors.black_color.into(),
+                        ..Default::default()
+                    },
+                    UIComponent,
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle {
+                            text: Text::from_section(
+                                "ping",
+                                TextStyle {
+                                    font: fonts.mono.clone(),
+                                    font_size: 2.0 * PIXEL_SCALE as f32,
+                                    color: COLORS[15].into(),
+                                },
+                            ),
+                            style: Style {
+                                position_type: PositionType::Absolute,
+                                top: Val::Px(0.0),
+                                left: Val::Px(PIXEL_SCALE as f32),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                        UIComponent,
+                    ));
+
+                    parent.spawn((
+                        TextBundle {
+                            text: Text::from_section(
+                                "",
+                                TextStyle {
+                                    font: fonts.mono.clone(),
+                                    font_size: 2.0 * PIXEL_SCALE as f32,
+                                    color: COLORS[15].into(),
+                                },
+                            ),
+                            style: Style {
+                                position_type: PositionType::Absolute,
+                                top: Val::Px(2.0 * PIXEL_SCALE as f32),
+                                left: Val::Px(0.0),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                        UIComponent,
+                        NetworkStatsDisplay,
                     ));
                 });
 

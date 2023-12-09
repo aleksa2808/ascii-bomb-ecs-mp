@@ -5,11 +5,14 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 use crate::{
     components::Position,
     constants::COLORS,
-    types::{Direction, ICEServerConfig, PlayerID, PostFreezeAction},
+    types::{Cooldown, Direction, ICEServerConfig, PlayerID, PostFreezeAction},
 };
 
 #[derive(Resource)]
-pub struct NetworkStatsTimer(pub Timer);
+pub struct NetworkStatsCooldown {
+    pub cooldown: Cooldown,
+    pub print_cooldown: usize,
+}
 
 #[derive(Resource)]
 pub struct Fonts {

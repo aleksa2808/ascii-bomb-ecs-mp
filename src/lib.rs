@@ -12,6 +12,7 @@ mod web;
 use bevy::{ecs as bevy_ecs, prelude::*};
 use bevy_ggrs::prelude::*;
 
+use types::Cooldown;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -72,10 +73,10 @@ pub fn run() {
     .init_resource::<HUDColors>()
     .init_resource::<GameTextures>()
     .add_state::<AppState>()
-    .insert_resource(NetworkStatsTimer(Timer::from_seconds(
-        2.0,
-        TimerMode::Repeating,
-    )))
+    .insert_resource(NetworkStatsCooldown {
+        cooldown: Cooldown::from_seconds(1.0),
+        print_cooldown: 0,
+    })
     .add_systems(Update, print_network_stats_system)
     .add_systems(
         OnEnter(AppState::Lobby),

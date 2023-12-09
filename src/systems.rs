@@ -41,19 +41,54 @@ use crate::{
 
 pub fn print_network_stats_system(
     time: Res<Time>,
-    mut timer: ResMut<NetworkStatsTimer>,
+    mut network_stats_cooldown: ResMut<NetworkStatsCooldown>,
     session: Option<Res<Session<GgrsConfig>>>,
+    mut network_stats_text_query: Query<&mut Text, With<NetworkStatsDisplay>>,
 ) {
-    if timer.0.tick(time.delta()).just_finished() {
+    let mut text = if let Ok(text) = network_stats_text_query.get_single_mut() {
+        text
+    } else {
+        network_stats_cooldown.cooldown.reset();
+        return;
+    };
+
+    network_stats_cooldown.cooldown.tick(time.delta());
+    if network_stats_cooldown.cooldown.trigger() {
+        let print_stats_to_console = if network_stats_cooldown.print_cooldown == 0 {
+            // print to console on every second update in order not to spam
+            network_stats_cooldown.print_cooldown = 1;
+            true
+        } else {
+            network_stats_cooldown.print_cooldown -= 1;
+            false
+        };
+
         if let Some(sess) = session {
             match sess.as_ref() {
                 Session::P2P(s) => {
                     let num_players = s.num_players();
-                    for i in 0..num_players {
+                    let mut player_pings = vec![None; num_players];
+                    player_pings.iter_mut().enumerate().for_each(|(i, ping)| {
                         if let Ok(stats) = s.network_stats(i) {
-                            info!("NetworkStats for player {}: {:?}", i, stats);
+                            if print_stats_to_console {
+                                info!("NetworkStats for player {}: {:?}", i, stats);
+                            }
+                            *ping = Some(stats.ping);
                         }
-                    }
+                    });
+                    let stats_text = player_pings
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &p)| {
+                            let ping = if let Some(p) = p {
+                                p.to_string()
+                            } else {
+                                "-".to_string()
+                            };
+                            format!("{i}:{ping: >4}")
+                        })
+                        .join("\n");
+                    text.sections[0].value = stats_text;
                 }
                 _ => unreachable!(),
             }

@@ -20,6 +20,9 @@ pub struct HUDRoot;
 pub struct GameTimerDisplay;
 
 #[derive(Component)]
+pub struct NetworkStatsDisplay;
+
+#[derive(Component)]
 pub struct PlayerPortraitDisplay;
 
 #[derive(Component)]
