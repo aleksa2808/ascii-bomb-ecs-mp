@@ -109,6 +109,18 @@ document.addEventListener('dblclick', function (event) {
     event.preventDefault();
 }, { passive: false });
 
+window.onload = () => {
+    // prevent non-number room ID input
+    var roomIdInput = document.getElementById('roomID');
+    roomIdInput.addEventListener('keypress', function (event) {
+        const isNumber = isFinite(event.key);
+        if (!isNumber) {
+            event.preventDefault();
+            return false;
+        }
+    });
+}
+
 function toggleCustomMatchboxServerSettings() {
     var checkbox = document.getElementById("customMatchboxServerCheckbox");
     var settings = document.getElementById("matchboxServerSettings");
@@ -135,6 +147,7 @@ window.toggleCustomICEServerSettings = toggleCustomICEServerSettings
 
 function startGame() {
     var number_of_players = parseInt(document.getElementById("numberInput").value);
+    var room_id = document.getElementById("roomID").value;
     var use_custom_matchbox_server_settings = document.getElementById('customMatchboxServerCheckbox').checked;
     var matchbox_server_url = "";
     var use_custom_ice_server_settings = document.getElementById('customICEServerCheckbox').checked;
@@ -146,6 +159,15 @@ function startGame() {
     if (number_of_players < 2 || number_of_players > 8) {
         alert("Please enter a player count between 2 and 8.");
         return;
+    }
+
+    if (room_id.trim() !== "") {
+        if (!/^([0-9]{4})$/.test(room_id)) {
+            alert("Invalid room ID.");
+            return;
+        }
+    } else {
+        room_id = "quick_join";
     }
 
     // Validate custom Matchbox server settings
@@ -171,6 +193,7 @@ function startGame() {
     }
 
     console.log("Number of players: " + number_of_players);
+    console.log("Room ID: " + room_id);
     if (use_custom_matchbox_server_settings) {
         console.log("Matchbox server URL: " + matchbox_server_url);
     }
@@ -212,7 +235,7 @@ function startGame() {
     updateCanvasContainerSize();
 
     canvas.focus();
-    start_game(number_of_players, matchbox_server_url, ice_server_url, turn_server_username, turn_server_credential);
+    start_game(number_of_players, room_id, matchbox_server_url, ice_server_url, turn_server_username, turn_server_credential);
 }
 window.startGame = startGame
 

@@ -185,8 +185,8 @@ impl WorldType {
 #[derive(Resource)]
 pub struct MatchboxConfig {
     pub number_of_players: usize,
+    pub room_id: String,
     pub matchbox_server_url: Option<String>,
-    pub room: Option<String>,
     pub ice_server_config: Option<ICEServerConfig>,
 }
 

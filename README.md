@@ -1,20 +1,14 @@
 # ascii-bomb-ecs-mp
 
-Multiplayer demo of the [ascii-bomb-ecs](https://github.com/aleksa2808/ascii-bomb-ecs) game. Available as a [web build](https://aleksa2808.github.io/ascii-bomb-ecs-mp/).
+Multiplayer experiment of the [ascii-bomb-ecs](https://github.com/aleksa2808/ascii-bomb-ecs) game that uses peer-to-peer rollback networking. Available natively or as a [web build](https://aleksa2808.github.io/ascii-bomb-ecs-mp/).
 
-## Build
+## Configuration
 
-For both modes a [matchbox server](https://github.com/johanhelsing/matchbox/tree/main/matchbox_server) is needed. It can be run locally or used from `wss://match-0-6.helsing.studio` (thanks to [johanhelsing](https://github.com/johanhelsing)).
+A [matchbox server](https://github.com/johanhelsing/matchbox/tree/main/matchbox_server) is needed to connect players. Without any configuration the one at `wss://match-0-6.helsing.studio` is used (thanks to [johanhelsing](https://github.com/johanhelsing)).
 
-### Native
+Additionally, if a direct connection cannot be made between clients, a TURN relay server is used through which all communication happens. The default TURN server is hosted in Frankfurt and has limited bandwidth, which can translate to high ping times for clients that are far away or unavailability if the monthly bandwidth is depleted.
 
-From the root folder run:
-
-```bash
-cargo run --release -- [--signal-server-address <SIGNAL_SERVER_ADDRESS>] [-n <NUMBER_OF_PLAYERS>]
-```
-
-### Web
+## Web build
 
 From the root folder run:
 

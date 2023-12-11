@@ -22,8 +22,8 @@ pub struct Args {
     #[clap(long)]
     pub matchbox_server_url: Option<String>,
 
-    #[clap(long)]
-    pub room: Option<String>,
+    #[clap(long, default_value = "quick_join")]
+    pub room_id: String,
 
     #[clap(long, short, default_value = "2")]
     pub number_of_players: usize,

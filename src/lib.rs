@@ -93,7 +93,7 @@ pub fn run() {
     #[cfg(not(target_arch = "wasm32"))]
     app.insert_resource(MatchboxConfig {
         matchbox_server_url: args.matchbox_server_url,
-        room: args.room,
+        room_id: args.room_id,
         number_of_players: args.number_of_players,
         ice_server_config: None,
     });

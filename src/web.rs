@@ -13,7 +13,7 @@ use crate::{
     AppState,
 };
 
-static START: Lazy<RwLock<Option<(usize, String, String, String, String)>>> =
+static START: Lazy<RwLock<Option<(usize, String, String, String, String, String)>>> =
     Lazy::new(|| RwLock::new(None));
 static INPUTS: Lazy<RwLock<VecDeque<u8>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
 
@@ -22,6 +22,7 @@ static INPUTS: Lazy<RwLock<VecDeque<u8>>> = Lazy::new(|| RwLock::new(VecDeque::n
 #[allow(dead_code)]
 pub fn start_game(
     number_of_players: usize,
+    room_id: &str,
     matchbox_server_url: &str,
     ice_server_url: &str,
     turn_server_username: &str,
@@ -29,6 +30,7 @@ pub fn start_game(
 ) {
     info!("start_game configs:");
     info!("player count: {number_of_players}");
+    info!("room id: {room_id}");
     info!("matchbox server url: {matchbox_server_url}");
     info!("stun/turn server url: {ice_server_url}");
     info!("turn server username: {turn_server_username}");
@@ -36,6 +38,7 @@ pub fn start_game(
     let mut start = START.write();
     *start = Some((
         number_of_players,
+        room_id.to_string(),
         matchbox_server_url.to_string(),
         ice_server_url.to_string(),
         turn_server_username.to_string(),
@@ -68,6 +71,7 @@ pub fn web_ready_to_start_update(
 ) {
     if let Some((
         number_of_players,
+        room_id,
         matchbox_server_url,
         ice_server_url,
         turn_server_username,
@@ -103,8 +107,8 @@ pub fn web_ready_to_start_update(
 
         commands.insert_resource(MatchboxConfig {
             number_of_players,
+            room_id,
             matchbox_server_url,
-            room: None,
             ice_server_config,
         });
         next_state.set(AppState::Lobby);

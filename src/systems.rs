@@ -137,20 +137,15 @@ pub fn setup_lobby(
 }
 
 pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<MatchboxConfig>) {
-    let room_id = match &matchbox_config.room {
-        Some(id) => id.clone(),
-        None => format!(
-            "ascii_bomb_ecs_mp?next={}",
-            &matchbox_config.number_of_players
-        ),
-    };
-
     let matchbox_server_url = match matchbox_config.matchbox_server_url.clone() {
         Some(url) => url,
         None => "wss://match-0-6.helsing.studio".to_string(),
     };
 
-    let room_url = format!("{}/{}", matchbox_server_url, room_id);
+    let room_url = format!(
+        "{}/ascii_bomb_ecs_mp_{}?next={}",
+        matchbox_server_url, matchbox_config.room_id, matchbox_config.number_of_players
+    );
     info!("Connecting to the matchbox server: {room_url:?}");
 
     let rtc_ice_server_config = match &matchbox_config.ice_server_config {
