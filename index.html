@@ -19,32 +19,40 @@
     <div id="button-box">
         <form>
             <label for="numberInput">Number of players:</label>
-            <input type="number" id="numberInput" name="number" min="2" max="8" value="2" required>
+            <input type="number" id="numberInput" name="number" min="2" max="8" value="2" inputmode="numeric" required>
             <br><br>
-            <label for="customMatchboxServerCheckbox">Custom Matchbox server:</label>
-            <input type="checkbox" id="customMatchboxServerCheckbox" name="customMatchboxServer"
-                onclick="toggleCustomMatchboxServerSettings()">
+            <label for="roomID">4-digit room ID:</label>
+            <input type="text" id="roomID" name="roomID" placeholder="optional" maxlength="4" size="6"
+                inputmode="numeric">
             <br><br>
-            <div id="matchboxServerSettings">
-                <label for="matchboxServerURL" id="matchboxServerURLLabel">Matchbox server URL:</label>
-                <input type="text" id="matchboxServerURL" name="matchboxServerURL" value="">
+            <!-- custom settings hidden for now, but are usable -->
+            <div id=" customServerSettings" hidden>
+                <label for="customMatchboxServerCheckbox">Custom Matchbox server:</label>
+                <input type="checkbox" id="customMatchboxServerCheckbox" name="customMatchboxServer"
+                    onclick="toggleCustomMatchboxServerSettings()">
                 <br><br>
+                <div id="matchboxServerSettings">
+                    <label for="matchboxServerURL">Matchbox server URL:</label>
+                    <input type="text" id="matchboxServerURL" name="matchboxServerURL" value="">
+                    <br><br>
+                </div>
+                <label for="customICEServerCheckbox">Custom ICE server:</label>
+                <input type="checkbox" id="customICEServerCheckbox" name="customICEServer"
+                    onclick="toggleCustomICEServerSettings()">
+                <br><br>
+                <div id="ICEServerSettings">
+                    <label for="iceServerURL">STUN/TURN server URL:</label>
+                    <input type="text" id="iceServerURL" name="iceServerURL" value="">
+                    <br><br>
+                    <label for="iceServerUsername">TURN server username:</label>
+                    <input type="text" id="iceServerUsername" name="iceServerUsername" value="">
+                    <br><br>
+                    <label for="iceServerCredential">TURN server credential:</label>
+                    <input type="text" id="iceServerCredential" name="iceServerCredential" value="">
+                    <br><br>
+                </div>
             </div>
-            <label for="customICEServerCheckbox">Custom ICE server:</label>
-            <input type="checkbox" id="customICEServerCheckbox" name="customICEServer"
-                onclick="toggleCustomICEServerSettings()">
-            <br><br>
-            <div id="ICEServerSettings">
-                <label for="iceServerURL">STUN/TURN server URL:</label>
-                <input type="text" id="iceServerURL" name="iceServerURL" value="">
-                <br><br>
-                <label for="iceServerUsername">TURN server username:</label>
-                <input type="text" id="iceServerUsername" name="iceServerUsername" value="">
-                <br><br>
-                <label for="iceServerCredential">TURN server credential:</label>
-                <input type="text" id="iceServerCredential" name="iceServerCredential" value="">
-                <br><br>
-            </div>
+            <br>
             <a id="button-loading" class="btn grey">Loading...</a>
             <a id="button-start" class="btn" onclick="startGame()" hidden>Start game</a>
         </form>

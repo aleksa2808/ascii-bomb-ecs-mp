@@ -68,6 +68,7 @@ label {
 
 input {
     font-size: 2rem;
+    vertical-align: center;
 }
 
 input[type=checkbox] {

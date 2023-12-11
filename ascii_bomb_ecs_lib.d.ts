@@ -2,12 +2,13 @@
 /* eslint-disable */
 /**
 * @param {number} number_of_players
+* @param {string} room_id
 * @param {string} matchbox_server_url
 * @param {string} ice_server_url
 * @param {string} turn_server_username
 * @param {string} turn_server_credential
 */
-export function start_game(number_of_players: number, matchbox_server_url: string, ice_server_url: string, turn_server_username: string, turn_server_credential: string): void;
+export function start_game(number_of_players: number, room_id: string, matchbox_server_url: string, ice_server_url: string, turn_server_username: string, turn_server_credential: string): void;
 /**
 * @param {number} input
 */
@@ -20,7 +21,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly start_game: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
+  readonly start_game: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => void;
   readonly set_input_active: (a: number) => void;
   readonly run: () => void;
   readonly wgpu_compute_pass_set_pipeline: (a: number, b: number) => void;
