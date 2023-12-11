@@ -42,8 +42,9 @@ pub const INPUT_ACTION: u8 = 1 << 4;
 pub const ROUND_DURATION_SECS: usize = 60;
 
 pub const FPS: usize = 30;
+pub const MAX_PREDICTED_FRAMES: usize = 8;
 
-// these need to be adjusted based on FPS as they must not be lower than the max_predictions value
+// these must not be lower than MAX_PREDICTED_FRAMES
 // TODO can some static asserts be made?
 pub const GET_READY_DISPLAY_FRAME_COUNT: usize = 3 * FPS;
 pub const GAME_START_FREEZE_FRAME_COUNT: usize = FPS / 2;
@@ -53,8 +54,6 @@ pub const TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT: usize = 5 * FPS;
 pub const BOMB_SHORTENED_FUSE_FRAME_COUNT: usize = 2;
 
 pub const MOVING_OBJECT_FRAME_INTERVAL: usize = 1;
-
-pub const PLAYER_DEATH_FRAME_DELAY: usize = FPS / 2;
 
 // TODO does float precision cause desyncs?
 pub const ITEM_SPAWN_CHANCE_PERCENTAGE: usize = 33;

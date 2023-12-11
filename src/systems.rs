@@ -25,9 +25,8 @@ use crate::{
         BOMB_SHORTENED_FUSE_FRAME_COUNT, BOMB_Z_LAYER, COLORS, FIRE_Z_LAYER, FPS,
         GAME_START_FREEZE_FRAME_COUNT, GET_READY_DISPLAY_FRAME_COUNT, HUD_HEIGHT, INPUT_ACTION,
         INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_UP, ITEM_SPAWN_CHANCE_PERCENTAGE,
-        LEADERBOARD_DISPLAY_FRAME_COUNT, MOVING_OBJECT_FRAME_INTERVAL, PIXEL_SCALE,
-        PLAYER_DEATH_FRAME_DELAY, TILE_HEIGHT, TILE_WIDTH, TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT,
-        WALL_Z_LAYER,
+        LEADERBOARD_DISPLAY_FRAME_COUNT, MAX_PREDICTED_FRAMES, MOVING_OBJECT_FRAME_INTERVAL,
+        PIXEL_SCALE, TILE_HEIGHT, TILE_WIDTH, TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT, WALL_Z_LAYER,
     },
     resources::*,
     types::{Direction, PlayerID, PostFreezeAction, RoundOutcome},
@@ -256,6 +255,8 @@ pub fn lobby_system(
     let players = socket.players();
 
     let mut sess_build = SessionBuilder::<GgrsConfig>::new()
+        .with_max_prediction_window(MAX_PREDICTED_FRAMES)
+        .unwrap()
         .with_num_players(matchbox_config.number_of_players)
         .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 1 });
 
@@ -1074,7 +1075,7 @@ pub fn player_burn(
                 frame_count.frame, player.id.0
             );
             commands.entity(entity).insert(Dead {
-                cleanup_frame: frame_count.frame + PLAYER_DEATH_FRAME_DELAY,
+                cleanup_frame: frame_count.frame + MAX_PREDICTED_FRAMES,
             });
         });
 }
@@ -1202,7 +1203,7 @@ pub fn wall_of_death_update(
                         frame_count.frame, player.id.0
                     );
                     commands.entity(entity).insert(Dead {
-                        cleanup_frame: frame_count.frame + PLAYER_DEATH_FRAME_DELAY,
+                        cleanup_frame: frame_count.frame + MAX_PREDICTED_FRAMES,
                     });
                 }
             } else {
