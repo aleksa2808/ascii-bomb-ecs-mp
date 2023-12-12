@@ -128,75 +128,75 @@ pub fn web_input(
     mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
     local_players: Res<LocalPlayers>,
-    mut r: Local<Vec<u8>>,
+    mut last_kb_input: Local<u8>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if r.len() != local_players.0.len() {
-        *r = vec![0; local_players.0.len()];
-    }
+    // there must be only one local player
+    assert_eq!(local_players.0.len(), 1);
+    let local_player_handle = *local_players.0.first().unwrap();
 
-    let mut local_inputs = HashMap::new();
+    // process web UI input
+    let mut web_input: u8 = 0;
 
-    for (i, handle) in local_players.0.iter().enumerate() {
-        if game_freeze.is_some() {
-            // The game should not be rollbacked during a freeze.
-            local_inputs.insert(*handle, PlayerInput(0));
-        } else {
-            let mut web_input: u8 = 0;
-
-            let mut inputs = INPUTS.write();
-            while let Some(input) = inputs.pop_back() {
-                if let Some(input_action) = match input {
-                    0 => Some(InputAction::Up),
-                    1 => Some(InputAction::Down),
-                    2 => Some(InputAction::Left),
-                    3 => Some(InputAction::Right),
-                    4 => Some(InputAction::Space),
-                    _ => None,
-                } {
-                    match input_action {
-                        InputAction::Up => {
-                            web_input |= INPUT_UP;
-                        }
-                        InputAction::Down => {
-                            web_input |= INPUT_DOWN;
-                        }
-                        InputAction::Left => {
-                            web_input |= INPUT_LEFT;
-                        }
-                        InputAction::Right => {
-                            web_input |= INPUT_RIGHT;
-                        }
-                        InputAction::Space => {
-                            web_input |= INPUT_ACTION;
-                        }
-                    }
+    let mut inputs = INPUTS.write();
+    while let Some(input) = inputs.pop_back() {
+        if let Some(input_action) = match input {
+            0 => Some(InputAction::Up),
+            1 => Some(InputAction::Down),
+            2 => Some(InputAction::Left),
+            3 => Some(InputAction::Right),
+            4 => Some(InputAction::Space),
+            _ => None,
+        } {
+            match input_action {
+                InputAction::Up => {
+                    web_input |= INPUT_UP;
+                }
+                InputAction::Down => {
+                    web_input |= INPUT_DOWN;
+                }
+                InputAction::Left => {
+                    web_input |= INPUT_LEFT;
+                }
+                InputAction::Right => {
+                    web_input |= INPUT_RIGHT;
+                }
+                InputAction::Space => {
+                    web_input |= INPUT_ACTION;
                 }
             }
-
-            let mut kb_input: u8 = 0;
-
-            if keyboard_input.pressed(KeyCode::Up) {
-                kb_input |= INPUT_UP;
-            }
-            if keyboard_input.pressed(KeyCode::Left) {
-                kb_input |= INPUT_LEFT;
-            }
-            if keyboard_input.pressed(KeyCode::Down) {
-                kb_input |= INPUT_DOWN;
-            }
-            if keyboard_input.pressed(KeyCode::Right) {
-                kb_input |= INPUT_RIGHT;
-            }
-            if keyboard_input.pressed(KeyCode::Space) {
-                kb_input |= INPUT_ACTION;
-            }
-
-            let inp = !r[i] & kb_input | web_input;
-            r[i] = kb_input;
-
-            local_inputs.insert(*handle, PlayerInput(inp));
         }
+    }
+
+    // process keyboard input
+    let mut kb_input: u8 = 0;
+
+    if keyboard_input.pressed(KeyCode::Up) {
+        kb_input |= INPUT_UP;
+    }
+    if keyboard_input.pressed(KeyCode::Left) {
+        kb_input |= INPUT_LEFT;
+    }
+    if keyboard_input.pressed(KeyCode::Down) {
+        kb_input |= INPUT_DOWN;
+    }
+    if keyboard_input.pressed(KeyCode::Right) {
+        kb_input |= INPUT_RIGHT;
+    }
+    if keyboard_input.pressed(KeyCode::Space) {
+        kb_input |= INPUT_ACTION;
+    }
+
+    // merge the inputs while only acknowledging new keyboard input
+    let input = !*last_kb_input & kb_input | web_input;
+    *last_kb_input = kb_input;
+
+    let mut local_inputs = HashMap::new();
+    if game_freeze.is_some() {
+        // override inputs during a freeze as the game must not be rolled back at this time
+        local_inputs.insert(local_player_handle, PlayerInput(0));
+    } else {
+        local_inputs.insert(local_player_handle, PlayerInput(input));
     }
 
     commands.insert_resource(LocalInputs::<GgrsConfig>(local_inputs));

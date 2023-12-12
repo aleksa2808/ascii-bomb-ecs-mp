@@ -46,43 +46,42 @@ pub fn native_input(
     mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
     local_players: Res<LocalPlayers>,
-    mut r: Local<Vec<u8>>,
+    mut last_kb_input: Local<u8>,
     game_freeze: Option<Res<GameFreeze>>,
 ) {
-    if r.len() != local_players.0.len() {
-        *r = vec![0; local_players.0.len()];
+    // there must be only one local player
+    assert_eq!(local_players.0.len(), 1);
+    let local_player_handle = *local_players.0.first().unwrap();
+
+    // process keyboard input
+    let mut kb_input: u8 = 0;
+
+    if keyboard_input.pressed(KeyCode::Up) {
+        kb_input |= INPUT_UP;
+    }
+    if keyboard_input.pressed(KeyCode::Left) {
+        kb_input |= INPUT_LEFT;
+    }
+    if keyboard_input.pressed(KeyCode::Down) {
+        kb_input |= INPUT_DOWN;
+    }
+    if keyboard_input.pressed(KeyCode::Right) {
+        kb_input |= INPUT_RIGHT;
+    }
+    if keyboard_input.pressed(KeyCode::Space) {
+        kb_input |= INPUT_ACTION;
     }
 
+    // only acknowledge new keyboard input
+    let input = !*last_kb_input & kb_input;
+    *last_kb_input = kb_input;
+
     let mut local_inputs = HashMap::new();
-
-    for (i, handle) in local_players.0.iter().enumerate() {
-        if game_freeze.is_some() {
-            // The game should not be rollbacked during a freeze.
-            local_inputs.insert(*handle, PlayerInput(0));
-        } else {
-            let mut input: u8 = 0;
-
-            if keyboard_input.pressed(KeyCode::Up) {
-                input |= INPUT_UP;
-            }
-            if keyboard_input.pressed(KeyCode::Left) {
-                input |= INPUT_LEFT;
-            }
-            if keyboard_input.pressed(KeyCode::Down) {
-                input |= INPUT_DOWN;
-            }
-            if keyboard_input.pressed(KeyCode::Right) {
-                input |= INPUT_RIGHT;
-            }
-            if keyboard_input.pressed(KeyCode::Space) {
-                input |= INPUT_ACTION;
-            }
-
-            let inp = !r[i] & input;
-            r[i] = input;
-
-            local_inputs.insert(*handle, PlayerInput(inp));
-        }
+    if game_freeze.is_some() {
+        // override inputs during a freeze as the game must not be rolled back at this time
+        local_inputs.insert(local_player_handle, PlayerInput(0));
+    } else {
+        local_inputs.insert(local_player_handle, PlayerInput(input));
     }
 
     commands.insert_resource(LocalInputs::<GgrsConfig>(local_inputs));
