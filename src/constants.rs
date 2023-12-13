@@ -55,5 +55,5 @@ pub const BOMB_SHORTENED_FUSE_FRAME_COUNT: usize = 2;
 
 pub const MOVING_OBJECT_FRAME_INTERVAL: usize = 1;
 
-// TODO does float precision cause desyncs?
-pub const ITEM_SPAWN_CHANCE_PERCENTAGE: usize = 33;
+// TODO figure out if floats can be used deterministically
+pub const ITEM_SPAWN_CHANCE_PERCENTAGE: u64 = 33;

@@ -12,7 +12,6 @@ use bevy::{
 };
 use bevy_ggrs::AddRollbackCommandExtension;
 use itertools::Itertools;
-use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
 
 use crate::{
     components::{
@@ -25,7 +24,8 @@ use crate::{
         PLAYER_Z_LAYER, ROUND_DURATION_SECS, TILE_HEIGHT, TILE_WIDTH, WALL_Z_LAYER,
     },
     resources::{
-        Fonts, GameEndFrame, GameTextures, HUDColors, Leaderboard, MapSize, WallOfDeath, WorldType,
+        Fonts, GameEndFrame, GameTextures, HUDColors, Leaderboard, MapSize, SessionRng,
+        WallOfDeath, WorldType,
     },
     types::{Direction, PlayerID, RoundOutcome},
 };
@@ -40,6 +40,12 @@ pub fn get_y(y: isize) -> f32 {
 
 pub fn decode(input: &str) -> String {
     String::from_utf8(STANDARD_NO_PAD.decode(input).unwrap()).unwrap()
+}
+
+pub fn shuffle<T>(elements: &mut [T], rng: &mut SessionRng) {
+    for i in (1..elements.len()).rev() {
+        elements.swap(i, rng.gen_u64() as usize % (i + 1));
+    }
 }
 
 pub fn setup_fullscreen_message_display(
@@ -387,7 +393,7 @@ fn init_hud(
 }
 
 fn spawn_map(
-    rng: &mut StdRng,
+    rng: &mut SessionRng,
     commands: &mut Commands,
     game_textures: &GameTextures,
     world_type: WorldType,
@@ -503,11 +509,16 @@ fn spawn_map(
         );
     }
 
-    let destructible_wall_positions = destructible_wall_potential_positions
+    let mut destructible_wall_positions = destructible_wall_potential_positions
         .into_iter()
         .sorted_by_key(|p| (p.x, p.y))
-        .choose_multiple(rng, num_of_destructible_walls_to_place);
-    for position in destructible_wall_positions.iter().cloned() {
+        .collect_vec();
+    shuffle(&mut destructible_wall_positions, rng);
+    for position in destructible_wall_positions
+        .iter()
+        .take(num_of_destructible_walls_to_place)
+        .cloned()
+    {
         commands
             .spawn((
                 SpriteBundle {
@@ -536,7 +547,7 @@ fn spawn_map(
 }
 
 pub fn setup_round(
-    rng: &mut StdRng,
+    rng: &mut SessionRng,
     commands: &mut Commands,
     map_size: MapSize,
     world_type: WorldType,
@@ -646,12 +657,12 @@ pub fn setup_round(
 }
 
 pub fn generate_item_at_position(
-    rng: &mut StdRng,
+    rng: &mut SessionRng,
     commands: &mut Commands,
     game_textures: &GameTextures,
     position: Position,
 ) {
-    let roll = rng.gen::<usize>() % 100;
+    let roll = rng.gen_u64() % 100;
 
     /* "Loot tables" */
     let item = match roll {
@@ -699,7 +710,7 @@ pub fn burn_item(
 }
 
 pub fn setup_leaderboard_display(
-    rng: &mut StdRng,
+    rng: &mut SessionRng,
     parent: &mut ChildBuilder,
     window_height: f32,
     window_width: f32,
@@ -845,7 +856,11 @@ pub fn setup_leaderboard_display(
                             height: Val::Px(PIXEL_SCALE as f32),
                             ..Default::default()
                         },
-                        background_color: (*COLORS.iter().choose(rng).unwrap()).into(),
+                        background_color: (*COLORS
+                            .iter()
+                            .nth(rng.gen_u64() as usize % COLORS.len())
+                            .unwrap())
+                        .into(),
                         ..Default::default()
                     },
                     UIComponent,

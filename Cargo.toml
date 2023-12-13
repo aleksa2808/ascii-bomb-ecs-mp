@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 rand = "0.8"
+rand_xoshiro = "0.6"
 itertools = "0.10"
 bevy_ggrs = { version = "0.14.0" }
 bytemuck = { version = "1.7", features = ["derive"] }
@@ -50,5 +51,6 @@ parking_lot = "0.12"
 wasm-bindgen = "0.2"
 
 [patch.crates-io]
+# bevy_ggrs = { path = "../bevy_ggrs" }
 bevy_ggrs = { git = "https://github.com/aleksa2808/bevy_ggrs" }
 ggrs = { git = "https://github.com/aleksa2808/ggrs" }

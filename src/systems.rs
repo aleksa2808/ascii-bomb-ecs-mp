@@ -13,11 +13,6 @@ use bevy_matchbox::{
     MatchboxSocket,
 };
 use itertools::Itertools;
-use rand::{
-    rngs::StdRng,
-    seq::{IteratorRandom, SliceRandom},
-    Rng, SeedableRng,
-};
 
 use crate::{
     components::*,
@@ -33,7 +28,7 @@ use crate::{
     utils::{
         burn_item, decode, format_hud_time, generate_item_at_position, get_x, get_y,
         setup_fullscreen_message_display, setup_get_ready_display, setup_leaderboard_display,
-        setup_round, setup_tournament_winner_display,
+        setup_round, setup_tournament_winner_display, shuffle,
     },
     AppState, GgrsConfig,
 };
@@ -249,7 +244,7 @@ pub fn lobby_system(
         rng_seeds.local ^ peer_rng_seeds.into_iter().reduce(|acc, e| acc ^ e).unwrap();
     info!("Generated the shared RNG seed: {shared_seed}");
     commands.remove_resource::<RngSeeds>();
-    commands.insert_resource(SessionRng(StdRng::seed_from_u64(shared_seed)));
+    commands.insert_resource(SessionRng::new(shared_seed));
 
     // extract final player list
     let players = socket.players();
@@ -344,7 +339,7 @@ pub fn setup_game(
     local_player_id: Res<LocalPlayerID>,
 ) {
     // choose the initial world
-    let world_type = WorldType::random(&mut session_rng.0);
+    let world_type = WorldType::random(&mut session_rng);
     commands.insert_resource(world_type);
 
     // setup the tournament leaderboard
@@ -454,7 +449,7 @@ pub fn player_move(
         .sorted_by_cached_key(|q| rollback_ordered.order(*q.0))
         .collect_vec();
     // shuffle to ensure fairness in situations where two players push the same bomb in the same frame
-    players.shuffle(&mut session_rng.0);
+    shuffle(&mut players, &mut session_rng);
     for (_, player, mut position, mut transform, mut sprite) in players {
         let input = inputs[player.id.0].0 .0;
         for (input_mask, moving_direction) in [
@@ -678,7 +673,7 @@ pub fn bomb_drop(
         .sorted_by_cached_key(|q| rollback_ordered.order(*q.0))
         .collect_vec();
     // shuffle to ensure fairness in situations where two players try to place a bomb in the same frame
-    players.shuffle(&mut session_rng.0);
+    shuffle(&mut players, &mut session_rng);
     for (_, player, position, mut bomb_satchel) in players {
         if inputs[player.id.0].0 .0 & INPUT_ACTION != 0
             && bomb_satchel.bombs_available > 0
@@ -894,9 +889,9 @@ pub fn crumbling_tick(
         commands.entity(entity).despawn_recursive();
 
         // drop power-up
-        let roll = session_rng.0.gen_range(0..100);
+        let roll = session_rng.gen_u64() % 100;
         if roll < ITEM_SPAWN_CHANCE_PERCENTAGE {
-            generate_item_at_position(&mut session_rng.0, &mut commands, &game_textures, *position);
+            generate_item_at_position(&mut session_rng, &mut commands, &game_textures, *position);
         }
     }
 }
@@ -1328,17 +1323,19 @@ pub fn cleanup_dead(
             // death pinata
             let invalid_item_positions: HashSet<Position> =
                 invalid_item_position_query.iter().copied().collect();
-            let valid_positions = (1..map_size.rows - 1)
+            let mut valid_positions = (1..map_size.rows - 1)
                 .flat_map(|y| {
                     (1..map_size.columns - 1).map(move |x| Position {
                         y: y as isize,
                         x: x as isize,
                     })
                 })
-                .filter(|position| !invalid_item_positions.contains(position));
-            for position in valid_positions.choose_multiple(&mut session_rng.0, 3) {
+                .filter(|position| !invalid_item_positions.contains(position))
+                .collect_vec();
+            shuffle(&mut valid_positions, &mut session_rng);
+            for &position in valid_positions.iter().take(3) {
                 generate_item_at_position(
-                    &mut session_rng.0,
+                    &mut session_rng,
                     &mut commands,
                     &game_textures,
                     position,
@@ -1435,7 +1432,7 @@ pub fn show_leaderboard(
                     let window = primary_window_query.get_single().unwrap();
 
                     setup_leaderboard_display(
-                        &mut session_rng.0,
+                        &mut session_rng,
                         parent,
                         window.height(),
                         window.width(),
@@ -1498,7 +1495,7 @@ pub fn show_tournament_winner(
             }
 
             // choose a world for the next tournament
-            *world_type = world_type.next_random(&mut session_rng.0);
+            *world_type = world_type.next_random(&mut session_rng);
 
             commands.insert_resource(GameFreeze {
                 end_frame: frame_count.frame + TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT,
@@ -1534,7 +1531,7 @@ pub fn start_new_round(
 
             let round_start_frame = frame_count.frame + GAME_START_FREEZE_FRAME_COUNT;
             setup_round(
-                &mut session_rng.0,
+                &mut session_rng,
                 &mut commands,
                 *map_size,
                 *world_type,

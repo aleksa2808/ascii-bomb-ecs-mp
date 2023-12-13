@@ -141,6 +141,7 @@ pub fn run() {
         .rollback_resource_with_copy::<FrameCount>()
         .rollback_resource_with_copy::<WallOfDeath>()
         .rollback_resource_with_copy::<GameFreeze>()
+        // checksums
         .checksum_component_with_hash::<Player>()
         .checksum_component_with_hash::<Position>()
         .checksum_component_with_hash::<BombSatchel>()

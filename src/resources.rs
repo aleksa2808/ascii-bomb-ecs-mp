@@ -1,6 +1,7 @@
 use bevy::{ecs as bevy_ecs, prelude::*, text::Font, utils::HashMap};
 use bevy_matchbox::matchbox_socket::PeerId;
-use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
+use rand::{Rng, SeedableRng};
+use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::{
     components::Position,
@@ -164,20 +165,20 @@ pub enum WorldType {
 impl WorldType {
     pub const LIST: [Self; 3] = [Self::GrassWorld, Self::IceWorld, Self::CloudWorld];
 
-    pub fn random(rng: &mut StdRng) -> Self {
-        match rng.gen_range(1..=3) {
-            1 => Self::GrassWorld,
-            2 => Self::IceWorld,
-            3 => Self::CloudWorld,
+    pub fn random(rng: &mut SessionRng) -> Self {
+        match rng.gen_u64() % 3 {
+            0 => Self::GrassWorld,
+            1 => Self::IceWorld,
+            2 => Self::CloudWorld,
             _ => unreachable!(),
         }
     }
 
-    pub fn next_random(&self, rng: &mut StdRng) -> Self {
+    pub fn next_random(&self, rng: &mut SessionRng) -> Self {
         Self::LIST
             .into_iter()
             .filter(|&w| w != *self)
-            .choose(rng)
+            .nth((rng.gen_u64() as usize) % (Self::LIST.len() - 1))
             .unwrap()
     }
 }
@@ -196,8 +197,20 @@ pub struct RngSeeds {
     pub remote: HashMap<PeerId, Option<u64>>,
 }
 
+// I could not verify it but I assume that the Xoshiro256StarStar generator is platform-independent. This is necessary for cross-platform deterministic gameplay.
 #[derive(Resource, Clone)]
-pub struct SessionRng(pub StdRng);
+pub struct SessionRng(Xoshiro256StarStar);
+
+impl SessionRng {
+    pub fn new(seed: u64) -> Self {
+        Self(Xoshiro256StarStar::seed_from_u64(seed))
+    }
+
+    // Allow only `u64` number generation in order to prevent things like generating platform dependent `usize` values.
+    pub fn gen_u64(&mut self) -> u64 {
+        self.0.gen()
+    }
+}
 
 #[derive(Resource)]
 pub struct LocalPlayerID(pub usize);
