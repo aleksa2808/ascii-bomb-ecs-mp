@@ -44,18 +44,18 @@ pub struct Player {
 
 #[derive(Component, Clone, Copy)]
 pub struct Dead {
-    pub cleanup_frame: usize,
+    pub cleanup_frame: u32,
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Position {
-    pub y: isize,
-    pub x: isize,
+    pub y: i8,
+    pub x: i8,
 }
 
 impl Position {
-    pub fn offset(&self, direction: Direction, distance: usize) -> Self {
-        let distance = distance as isize;
+    pub fn offset(&self, direction: Direction, distance: u8) -> Self {
+        let distance = distance as i8;
 
         let (y_offset, x_offset) = match direction {
             Direction::Right => (0, distance),
@@ -73,33 +73,33 @@ impl Position {
 
 #[derive(Component, Clone, Copy, Hash)]
 pub struct BombSatchel {
-    pub bombs_available: usize,
-    pub bomb_range: usize,
+    pub bombs_available: u8,
+    pub bomb_range: u8,
 }
 
 #[derive(Component, Clone, Copy)]
 pub struct Bomb {
     pub owner: Option<PlayerID>,
-    pub range: usize,
-    pub expiration_frame: usize,
+    pub range: u8,
+    pub expiration_frame: u32,
 }
 
 #[derive(Component, Clone, Copy)]
 pub struct Moving {
     pub direction: Direction,
-    pub next_move_frame: usize,
-    pub frame_interval: usize,
+    pub next_move_frame: u32,
+    pub frame_interval: u32,
 }
 
 #[derive(Component, Clone, Copy)]
 pub struct Fuse {
     pub color: Color,
-    pub start_frame: usize,
+    pub start_frame: u32,
 }
 
 #[derive(Component, Clone, Copy)]
 pub struct Fire {
-    pub expiration_frame: usize,
+    pub expiration_frame: u32,
 }
 
 #[derive(Component, Clone, Copy)]
@@ -113,10 +113,10 @@ pub struct Destructible;
 
 #[derive(Component, Clone, Copy)]
 pub struct Crumbling {
-    pub expiration_frame: usize,
+    pub expiration_frame: u32,
 }
 
-#[derive(Component, Debug, Clone, Copy, Hash)]
+#[derive(Component, Debug, Clone, Copy)]
 pub enum Item {
     BombsUp,
     RangeUp,
@@ -125,5 +125,5 @@ pub enum Item {
 
 #[derive(Component, Clone, Copy)]
 pub struct BurningItem {
-    pub expiration_frame: usize,
+    pub expiration_frame: u32,
 }

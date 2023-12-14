@@ -111,7 +111,7 @@ pub fn run() {
     let input_fn = native_input;
 
     app.add_plugins(GgrsPlugin::<GgrsConfig>::default())
-        .set_rollback_schedule_fps(FPS)
+        .set_rollback_schedule_fps(FPS as usize)
         .add_systems(ReadInputs, input_fn)
         // Bevy components
         .rollback_component_with_clone::<Sprite>()
@@ -145,8 +145,12 @@ pub fn run() {
         .checksum_component_with_hash::<Player>()
         .checksum_component_with_hash::<Position>()
         .checksum_component_with_hash::<BombSatchel>()
-        .checksum_component_with_hash::<Item>()
-        // .checksum_resource_with_hash::<SessionRng>()
+        // enums seem to hash from an isize so the derived implementation isn't portable
+        .checksum_component::<Item>(|item| match item {
+            Item::BombsUp => 0,
+            Item::RangeUp => 1,
+            Item::BombPush => 2,
+        })
         .add_systems(
             GgrsSchedule,
             // list too long for one chain

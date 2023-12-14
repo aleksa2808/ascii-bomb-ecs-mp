@@ -13,7 +13,7 @@ use crate::{
     AppState,
 };
 
-static START: Lazy<RwLock<Option<(usize, String, String, String, String, String)>>> =
+static START: Lazy<RwLock<Option<(u8, String, String, String, String, String)>>> =
     Lazy::new(|| RwLock::new(None));
 static INPUTS: Lazy<RwLock<VecDeque<u8>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
 
@@ -21,7 +21,7 @@ static INPUTS: Lazy<RwLock<VecDeque<u8>>> = Lazy::new(|| RwLock::new(VecDeque::n
 #[wasm_bindgen]
 #[allow(dead_code)]
 pub fn start_game(
-    number_of_players: usize,
+    number_of_players: u8,
     room_id: &str,
     matchbox_server_url: &str,
     ice_server_url: &str,
@@ -115,7 +115,7 @@ pub fn web_ready_to_start_update(
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum InputAction {
     Up,
     Down,

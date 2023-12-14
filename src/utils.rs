@@ -30,12 +30,12 @@ use crate::{
     types::{Direction, PlayerID, RoundOutcome},
 };
 
-pub fn get_x(x: isize) -> f32 {
-    TILE_WIDTH as f32 / 2.0 + (x * TILE_WIDTH as isize) as f32
+pub fn get_x(x: i8) -> f32 {
+    TILE_WIDTH as f32 / 2.0 + (x * TILE_WIDTH as i8) as f32
 }
 
-pub fn get_y(y: isize) -> f32 {
-    -(TILE_HEIGHT as f32 / 2.0 + (y * TILE_HEIGHT as isize) as f32)
+pub fn get_y(y: i8) -> f32 {
+    -(TILE_HEIGHT as f32 / 2.0 + (y * TILE_HEIGHT as i8) as f32)
 }
 
 pub fn decode(input: &str) -> String {
@@ -81,7 +81,7 @@ pub fn setup_fullscreen_message_display(
                     style: Style {
                         position_type: PositionType::Absolute,
                         top: Val::Px(center_y),
-                        left: Val::Px(center_x - (message.len() * PIXEL_SCALE) as f32),
+                        left: Val::Px(center_x - (message.len() * PIXEL_SCALE as usize) as f32),
                         ..Default::default()
                     },
                     ..Default::default()
@@ -96,12 +96,12 @@ pub fn setup_get_ready_display(
     window: &Window,
     game_textures: &GameTextures,
     fonts: &Fonts,
-    number_of_players: usize,
-    local_player_id: usize,
+    number_of_players: u8,
+    local_player_id: u8,
 ) {
-    let portrait_distance = (12 - number_of_players) * PIXEL_SCALE;
-    let total_width = number_of_players * (TILE_WIDTH + 2 * PIXEL_SCALE/* border */)
-        + (number_of_players - 1) * portrait_distance;
+    let portrait_distance = (12 - number_of_players) as u32 * PIXEL_SCALE;
+    let total_width = number_of_players as u32 * (TILE_WIDTH + 2 * PIXEL_SCALE/* border */)
+        + (number_of_players - 1) as u32 * portrait_distance;
 
     let center_y = window.height() / 2.0 - (4 * PIXEL_SCALE) as f32 /* accounting for the get ready text */;
     let center_x = window.width() / 2.0;
@@ -121,8 +121,8 @@ pub fn setup_get_ready_display(
             for i in 0..number_of_players {
                 // highlight the local player
                 let border_color = COLORS[if i == local_player_id { 12 } else { 0 }];
-                let offset_x =
-                    offset_x + (i * (TILE_WIDTH + 2 * PIXEL_SCALE + portrait_distance)) as f32;
+                let offset_x = offset_x
+                    + (i as u32 * (TILE_WIDTH + 2 * PIXEL_SCALE + portrait_distance)) as f32;
 
                 parent
                     .spawn(NodeBundle {
@@ -191,7 +191,7 @@ pub fn setup_get_ready_display(
         });
 }
 
-pub fn format_hud_time(remaining_seconds: usize) -> String {
+pub fn format_hud_time(remaining_seconds: u32) -> String {
     format!(
         "{:02}:{:02}",
         remaining_seconds / 60,
@@ -278,7 +278,9 @@ fn init_hud(
                             left: Val::Px(width - 6.0 * PIXEL_SCALE as f32),
                             top: Val::Px(0.0),
                             width: Val::Px(6.0 * PIXEL_SCALE as f32),
-                            height: Val::Px(2.0 * ((1 + player_ids.len()) * PIXEL_SCALE) as f32),
+                            height: Val::Px(
+                                2.0 * ((1 + player_ids.len()) * PIXEL_SCALE as usize) as f32,
+                            ),
                             ..Default::default()
                         },
                         background_color: hud_colors.black_color.into(),
@@ -338,7 +340,7 @@ fn init_hud(
                         NodeBundle {
                             style: Style {
                                 position_type: PositionType::Absolute,
-                                left: Val::Px(((5 + 12 * player_id.0) * PIXEL_SCALE) as f32),
+                                left: Val::Px(((5 + 12 * player_id.0) as u32 * PIXEL_SCALE) as f32),
                                 top: Val::Px(PIXEL_SCALE as f32),
                                 width: Val::Px(8.0 * PIXEL_SCALE as f32),
                                 height: Val::Px(10.0 * PIXEL_SCALE as f32),
@@ -405,7 +407,7 @@ fn spawn_map(
         for i in 0..map_size.columns {
             commands.spawn(SpriteBundle {
                 texture: game_textures.get_map_textures(world_type).empty.clone(),
-                transform: Transform::from_xyz(get_x(i as isize), get_y(j as isize), 0.0),
+                transform: Transform::from_xyz(get_x(i as i8), get_y(j as i8), 0.0),
                 sprite: Sprite {
                     custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
                     ..Default::default()
@@ -419,34 +421,28 @@ fn spawn_map(
     let mut stone_wall_positions = HashSet::new();
     for i in 0..map_size.rows {
         // left
-        stone_wall_positions.insert(Position {
-            y: i as isize,
-            x: 0,
-        });
+        stone_wall_positions.insert(Position { y: i as i8, x: 0 });
         // right
         stone_wall_positions.insert(Position {
-            y: i as isize,
-            x: (map_size.columns - 1) as isize,
+            y: i as i8,
+            x: (map_size.columns - 1) as i8,
         });
     }
     for i in 1..map_size.columns - 1 {
         // top
-        stone_wall_positions.insert(Position {
-            y: 0,
-            x: i as isize,
-        });
+        stone_wall_positions.insert(Position { y: 0, x: i as i8 });
         // bottom
         stone_wall_positions.insert(Position {
-            y: (map_size.rows - 1) as isize,
-            x: i as isize,
+            y: (map_size.rows - 1) as i8,
+            x: i as i8,
         });
     }
     // checkered middle
     for i in (2..map_size.rows).step_by(2) {
         for j in (2..map_size.columns).step_by(2) {
             stone_wall_positions.insert(Position {
-                y: i as isize,
-                x: j as isize,
+                y: i as i8,
+                x: j as i8,
             });
         }
     }
@@ -471,8 +467,8 @@ fn spawn_map(
     let mut destructible_wall_potential_positions: HashSet<Position> = (0..map_size.rows)
         .flat_map(|y| {
             (0..map_size.columns).map(move |x| Position {
-                y: y as isize,
-                x: x as isize,
+                y: y as i8,
+                x: x as i8,
             })
         })
         .filter(|p| !stone_wall_positions.contains(p))
@@ -550,8 +546,8 @@ pub fn setup_round(
     game_textures: &GameTextures,
     fonts: &Fonts,
     hud_colors: &HUDColors,
-    number_of_players: usize,
-    round_start_frame: usize,
+    number_of_players: u8,
+    round_start_frame: u32,
 ) {
     let player_ids = (0..number_of_players)
         .map(PlayerID)
@@ -577,7 +573,7 @@ pub fn setup_round(
                 parent,
                 hud_colors,
                 fonts,
-                (map_size.columns * TILE_WIDTH) as f32,
+                (map_size.columns as u32 * TILE_WIDTH) as f32,
                 world_type,
                 game_textures,
                 &player_ids,
@@ -599,8 +595,8 @@ pub fn setup_round(
         possible_player_spawn_positions
             .iter()
             .map(|(y, x)| Position {
-                y: *y as isize,
-                x: *x as isize,
+                y: *y as i8,
+                x: *x as i8,
             });
 
     let mut player_spawn_positions = vec![];
@@ -694,7 +690,7 @@ pub fn burn_item(
     game_textures: &GameTextures,
     item_entity: Entity,
     item_texture: &mut Handle<Image>,
-    current_frame: usize,
+    current_frame: u32,
 ) {
     commands
         .entity(item_entity)
@@ -755,7 +751,9 @@ pub fn setup_leaderboard_display(
                                     style: Style {
                                         position_type: PositionType::Absolute,
                                         left: Val::Px(4.0 * PIXEL_SCALE as f32),
-                                        top: Val::Px(((6 + player_id.0 * 12) * PIXEL_SCALE) as f32),
+                                        top: Val::Px(
+                                            ((6 + player_id.0 * 12) as u32 * PIXEL_SCALE) as f32,
+                                        ),
                                         width: Val::Px(TILE_WIDTH as f32),
                                         height: Val::Px(TILE_HEIGHT as f32),
                                         ..Default::default()
@@ -789,8 +787,10 @@ pub fn setup_leaderboard_display(
                                 ImageBundle {
                                     style: Style {
                                         position_type: PositionType::Absolute,
-                                        top: Val::Px(((7 + player_id.0 * 12) * PIXEL_SCALE) as f32),
-                                        left: Val::Px(((15 + i * 9) * PIXEL_SCALE) as f32),
+                                        top: Val::Px(
+                                            ((7 + player_id.0 * 12) as u32 * PIXEL_SCALE) as f32,
+                                        ),
+                                        left: Val::Px(((15 + i * 9) as u32 * PIXEL_SCALE) as f32),
                                         width: Val::Px(5.0 * PIXEL_SCALE as f32),
                                         height: Val::Px(7.0 * PIXEL_SCALE as f32),
                                         ..Default::default()
@@ -841,7 +841,7 @@ pub fn setup_leaderboard_display(
                 });
 
             // spawn border
-            let mut spawn_color = |y: usize, x: usize| {
+            let mut spawn_color = |y: u32, x: u32| {
                 parent.spawn((
                     NodeBundle {
                         style: Style {
@@ -863,8 +863,8 @@ pub fn setup_leaderboard_display(
                 ));
             };
 
-            let height = window_height as usize / PIXEL_SCALE;
-            let width = window_width as usize / PIXEL_SCALE;
+            let height = window_height as u32 / PIXEL_SCALE;
+            let width = window_width as u32 / PIXEL_SCALE;
             for y in 0..height {
                 spawn_color(y, 0);
                 spawn_color(y, 1);

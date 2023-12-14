@@ -113,15 +113,15 @@ pub fn setup_lobby(
     // resize window based on map size
     let mut window = primary_window_query.single_mut();
     window.resolution.set(
-        (map_size.columns * TILE_WIDTH) as f32,
-        (HUD_HEIGHT + map_size.rows * TILE_HEIGHT) as f32,
+        (map_size.columns as u32 * TILE_WIDTH) as f32,
+        (HUD_HEIGHT + map_size.rows as u32 * TILE_HEIGHT) as f32,
     );
 
     // spawn the main camera
     commands.spawn(Camera2dBundle {
         transform: Transform::from_xyz(
-            ((map_size.columns * TILE_WIDTH) as f32) / 2.0,
-            -((map_size.rows * TILE_HEIGHT - HUD_HEIGHT) as f32 / 2.0),
+            ((map_size.columns as u32 * TILE_WIDTH) as f32) / 2.0,
+            -((map_size.rows as u32 * TILE_HEIGHT - HUD_HEIGHT) as f32 / 2.0),
             999.9,
         ),
         ..default()
@@ -163,7 +163,7 @@ pub fn start_matchbox_socket(mut commands: Commands, matchbox_config: Res<Matchb
     info!("Generated the local RNG seed: {local_seed}");
     commands.insert_resource(RngSeeds {
         local: local_seed,
-        remote: HashMap::with_capacity(matchbox_config.number_of_players - 1),
+        remote: HashMap::with_capacity(matchbox_config.number_of_players as usize - 1),
     });
 }
 
@@ -223,7 +223,7 @@ pub fn lobby_system(
 
     let peer_rng_seeds = rng_seeds.remote.values().filter_map(|r| *r).collect_vec();
     let remaining =
-        matchbox_config.number_of_players - (1 /* local player */ + peer_rng_seeds.len());
+        matchbox_config.number_of_players - (1 /* local player */ + peer_rng_seeds.len() as u8);
 
     // update and recenter the info text
     {
@@ -232,7 +232,8 @@ pub fn lobby_system(
         let (mut text, mut style) = info_text_query.single_mut();
         text.sections[0].value = message;
         style.left = Val::Px(
-            primary_window_query.single().width() / 2.0 - (message_length * PIXEL_SCALE) as f32,
+            primary_window_query.single().width() / 2.0
+                - (message_length as u32 * PIXEL_SCALE) as f32,
         );
     }
 
@@ -250,9 +251,9 @@ pub fn lobby_system(
     let players = socket.players();
 
     let mut sess_build = SessionBuilder::<GgrsConfig>::new()
-        .with_max_prediction_window(MAX_PREDICTED_FRAMES)
+        .with_max_prediction_window(MAX_PREDICTED_FRAMES as usize)
         .unwrap()
-        .with_num_players(matchbox_config.number_of_players)
+        .with_num_players(matchbox_config.number_of_players as usize)
         .with_desync_detection_mode(bevy_ggrs::ggrs::DesyncDetection::On { interval: 1 });
 
     let mut local_player_id = None;
@@ -264,7 +265,7 @@ pub fn lobby_system(
         if let PlayerType::Local = player {
             assert!(local_player_id.is_none());
             info!("Local player ID: {i}");
-            local_player_id = Some(LocalPlayerID(i));
+            local_player_id = Some(LocalPlayerID(i as u8));
         }
     }
     commands.insert_resource(local_player_id.unwrap());
@@ -383,7 +384,7 @@ pub fn update_hud_clock(
 
     let game_end_frame = game_end_frame.unwrap();
     let remaining_seconds =
-        ((game_end_frame.0 - frame_count.frame) as f32 / FPS as f32).ceil() as usize;
+        ((game_end_frame.0 - frame_count.frame) as f32 / FPS as f32).ceil() as u32;
     clock_text_query.single_mut().sections[0].value = format_hud_time(remaining_seconds);
 }
 
@@ -451,7 +452,7 @@ pub fn player_move(
     // shuffle to ensure fairness in situations where two players push the same bomb in the same frame
     shuffle(&mut players, &mut session_rng);
     for (_, player, mut position, mut transform, mut sprite) in players {
-        let input = inputs[player.id.0].0 .0;
+        let input = inputs[player.id.0 as usize].0 .0;
         for (input_mask, moving_direction) in [
             (INPUT_UP, Direction::Up),
             (INPUT_DOWN, Direction::Down),
@@ -675,7 +676,7 @@ pub fn bomb_drop(
     // shuffle to ensure fairness in situations where two players try to place a bomb in the same frame
     shuffle(&mut players, &mut session_rng);
     for (_, player, position, mut bomb_satchel) in players {
-        if inputs[player.id.0].0 .0 & INPUT_ACTION != 0
+        if inputs[player.id.0 as usize].0 .0 & INPUT_ACTION != 0
             && bomb_satchel.bombs_available > 0
             && !invalid_bomb_positions.contains(position)
         {
@@ -770,7 +771,7 @@ pub fn animate_fuse(
     }
 
     for (parent, mut text, fuse, mut transform) in fuse_query.iter_mut() {
-        const FUSE_ANIMATION_FRAME_COUNT: usize = (FPS as f32 * 0.1) as usize;
+        const FUSE_ANIMATION_FRAME_COUNT: u32 = (FPS as f32 * 0.1) as u32;
         // TODO double check calculation
         let percent_left = (FUSE_ANIMATION_FRAME_COUNT
             - (frame_count.frame - fuse.start_frame) % FUSE_ANIMATION_FRAME_COUNT)
@@ -1141,53 +1142,52 @@ pub fn wall_of_death_update(
 
     let mut wall_of_death = wall_of_death.unwrap();
 
-    let get_next_position_direction = |mut position: Position,
-                                       mut direction: Direction|
-     -> Option<(Position, Direction)> {
-        let end_position = Position {
-            y: map_size.rows as isize - 3,
-            x: 3,
+    let get_next_position_direction =
+        |mut position: Position, mut direction: Direction| -> Option<(Position, Direction)> {
+            let end_position = Position {
+                y: map_size.rows as i8 - 3,
+                x: 3,
+            };
+
+            let indestructible_walls: HashSet<Position> =
+                indestructible_wall_query.iter().copied().collect();
+            loop {
+                if position == end_position {
+                    break None;
+                }
+
+                match position {
+                    Position { y: 1, x: 1 } | Position { y: 2, x: 2 } => {
+                        direction = Direction::Right;
+                    }
+                    Position { y: 1, x } if x == map_size.columns as i8 - 2 => {
+                        direction = Direction::Down;
+                    }
+                    Position { y, x }
+                        if y == map_size.rows as i8 - 2 && x == map_size.columns as i8 - 2 =>
+                    {
+                        direction = Direction::Left;
+                    }
+                    Position { y, x: 2 } if y == map_size.rows as i8 - 2 => {
+                        direction = Direction::Up;
+                    }
+                    Position { y: 2, x } if x == map_size.columns as i8 - 3 => {
+                        direction = Direction::Down;
+                    }
+                    Position { y, x }
+                        if y == map_size.rows as i8 - 3 && x == map_size.columns as i8 - 3 =>
+                    {
+                        direction = Direction::Left;
+                    }
+                    _ => (),
+                }
+
+                position = position.offset(direction, 1);
+                if !indestructible_walls.contains(&position) {
+                    break Some((position, direction));
+                }
+            }
         };
-
-        let indestructible_walls: HashSet<Position> =
-            indestructible_wall_query.iter().copied().collect();
-        loop {
-            if position == end_position {
-                break None;
-            }
-
-            match position {
-                Position { y: 1, x: 1 } | Position { y: 2, x: 2 } => {
-                    direction = Direction::Right;
-                }
-                Position { y: 1, x } if x == map_size.columns as isize - 2 => {
-                    direction = Direction::Down;
-                }
-                Position { y, x }
-                    if y == map_size.rows as isize - 2 && x == map_size.columns as isize - 2 =>
-                {
-                    direction = Direction::Left;
-                }
-                Position { y, x: 2 } if y == map_size.rows as isize - 2 => {
-                    direction = Direction::Up;
-                }
-                Position { y: 2, x } if x == map_size.columns as isize - 3 => {
-                    direction = Direction::Down;
-                }
-                Position { y, x }
-                    if y == map_size.rows as isize - 3 && x == map_size.columns as isize - 3 =>
-                {
-                    direction = Direction::Left;
-                }
-                _ => (),
-            }
-
-            position = position.offset(direction, 1);
-            if !indestructible_walls.contains(&position) {
-                break Some((position, direction));
-            }
-        }
-    };
 
     let mut clear_position_and_spawn_wall = |position: Position| {
         for (entity, position, bomb) in entity_query.iter().filter(|(_, &p, _)| p == position) {
@@ -1249,7 +1249,7 @@ pub fn wall_of_death_update(
 
                     Some(WallOfDeath::Active {
                         position: Position {
-                            y: map_size.rows as isize - 1,
+                            y: map_size.rows as i8 - 1,
                             x: 1,
                         },
                         direction: Direction::Up,
@@ -1326,8 +1326,8 @@ pub fn cleanup_dead(
             let mut valid_positions = (1..map_size.rows - 1)
                 .flat_map(|y| {
                     (1..map_size.columns - 1).map(move |x| Position {
-                        y: y as isize,
-                        x: x as isize,
+                        y: y as i8,
+                        x: x as i8,
                     })
                 })
                 .filter(|position| !invalid_item_positions.contains(position))

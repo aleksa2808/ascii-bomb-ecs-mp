@@ -26,7 +26,7 @@ pub struct Args {
     pub room_id: String,
 
     #[clap(long, short, default_value = "2")]
-    pub number_of_players: usize,
+    pub number_of_players: u8,
 }
 
 impl Default for Args {

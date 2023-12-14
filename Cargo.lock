@@ -806,12 +806,13 @@ dependencies = [
 [[package]]
 name = "bevy_ggrs"
 version = "0.14.0"
-source = "git+https://github.com/aleksa2808/bevy_ggrs#d5152ea998dfdbe6602a1d97285c82fb5f4f5036"
+source = "git+https://github.com/aleksa2808/bevy_ggrs?branch=desync_fixes#5b9509291635a470cdddce0a4b90c60f4a8cd7cd"
 dependencies = [
  "bevy",
  "bytemuck",
  "ggrs",
  "log",
+ "seahash",
 ]
 
 [[package]]
@@ -3885,6 +3886,11 @@ dependencies = [
  "thiserror",
  "url",
 ]
+
+[[package]]
+name = "seahash"
+version = "4.1.0"
+source = "git+https://github.com/aleksa2808/seahash?branch=panic-on-xsize-hashing#718d67b720ac185bcadd25931a80c1da7087de17"
 
 [[package]]
 name = "sec1"

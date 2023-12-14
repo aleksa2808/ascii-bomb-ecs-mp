@@ -12,7 +12,7 @@ use crate::{
 #[derive(Resource)]
 pub struct NetworkStatsCooldown {
     pub cooldown: Cooldown,
-    pub print_cooldown: usize,
+    pub print_cooldown: u32,
 }
 
 #[derive(Resource)]
@@ -93,7 +93,7 @@ impl GameTextures {
         self.penguin_variants
             .iter()
             .cycle()
-            .nth(player_id.0)
+            .nth(player_id.0 as usize)
             .unwrap()
     }
 }
@@ -149,11 +149,10 @@ impl FromWorld for GameTextures {
 
 #[derive(Resource, Clone, Copy)]
 pub struct MapSize {
-    pub rows: usize,
-    pub columns: usize,
+    pub rows: u8,
+    pub columns: u8,
 }
 
-// Not to be confused with Bevy ECS `World`!
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(clippy::enum_variant_names)]
 pub enum WorldType {
@@ -185,7 +184,7 @@ impl WorldType {
 
 #[derive(Resource)]
 pub struct MatchboxConfig {
-    pub number_of_players: usize,
+    pub number_of_players: u8,
     pub room_id: String,
     pub matchbox_server_url: Option<String>,
     pub ice_server_config: Option<ICEServerConfig>,
@@ -213,37 +212,37 @@ impl SessionRng {
 }
 
 #[derive(Resource)]
-pub struct LocalPlayerID(pub usize);
+pub struct LocalPlayerID(pub u8);
 
 #[derive(Resource)]
 pub struct Leaderboard {
-    pub scores: HashMap<PlayerID, usize>,
-    pub winning_score: usize,
+    pub scores: HashMap<PlayerID, u8>,
+    pub winning_score: u8,
 }
 
 #[derive(Resource, Clone, Copy)]
 pub struct FrameCount {
-    pub frame: usize,
+    pub frame: u32,
 }
 
 #[derive(Resource, Clone, Copy)]
 pub enum WallOfDeath {
     Dormant {
-        activation_frame: usize,
+        activation_frame: u32,
     },
     Active {
         position: Position,
         direction: Direction,
-        next_step_frame: usize,
+        next_step_frame: u32,
     },
     Done,
 }
 
 #[derive(Resource)]
-pub struct GameEndFrame(pub usize);
+pub struct GameEndFrame(pub u32);
 
 #[derive(Resource, Clone, Copy)]
 pub struct GameFreeze {
-    pub end_frame: usize,
+    pub end_frame: u32,
     pub post_freeze_action: Option<PostFreezeAction>,
 }
