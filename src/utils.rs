@@ -44,7 +44,7 @@ pub fn decode(input: &str) -> String {
 
 pub fn shuffle<T>(elements: &mut [T], rng: &mut SessionRng) {
     for i in (1..elements.len()).rev() {
-        elements.swap(i, rng.gen_u64() as usize % (i + 1));
+        elements.swap(i, (rng.gen_u64() % (i as u64 + 1)) as usize);
     }
 }
 
@@ -492,15 +492,11 @@ fn spawn_map(
     }
 
     let number_of_players = player_spawn_positions.len();
-    // TODO remove f32 and this panic
-    let percent_of_passable_positions_to_fill = match number_of_players {
-        2..=3 => 40.0,
-        4..=8 => 50.0,
+    let num_of_destructible_walls_to_place = match number_of_players {
+        2..=3 => number_of_passable_positions / 5 * 2,
+        4..=8 => number_of_passable_positions / 2,
         _ => unreachable!(),
     };
-    let num_of_destructible_walls_to_place = (number_of_passable_positions as f32
-        * percent_of_passable_positions_to_fill
-        / 100.0) as usize;
     if destructible_wall_potential_positions.len() < num_of_destructible_walls_to_place {
         panic!(
             "Not enough passable positions available for placing destructible walls. Have {}, but need at least {}",
@@ -511,7 +507,7 @@ fn spawn_map(
 
     let mut destructible_wall_positions = destructible_wall_potential_positions
         .into_iter()
-        .sorted_by_key(|p| (p.x, p.y))
+        .sorted()
         .collect_vec();
     shuffle(&mut destructible_wall_positions, rng);
     for position in destructible_wall_positions
