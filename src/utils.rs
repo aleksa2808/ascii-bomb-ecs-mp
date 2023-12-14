@@ -31,11 +31,11 @@ use crate::{
 };
 
 pub fn get_x(x: i8) -> f32 {
-    TILE_WIDTH as f32 / 2.0 + (x * TILE_WIDTH as i8) as f32
+    TILE_WIDTH as f32 / 2.0 + (x as i32 * TILE_WIDTH as i32) as f32
 }
 
 pub fn get_y(y: i8) -> f32 {
-    -(TILE_HEIGHT as f32 / 2.0 + (y * TILE_HEIGHT as i8) as f32)
+    -(TILE_HEIGHT as f32 / 2.0 + (y as i32 * TILE_HEIGHT as i32) as f32)
 }
 
 pub fn decode(input: &str) -> String {
