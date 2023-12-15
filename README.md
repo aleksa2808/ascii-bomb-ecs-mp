@@ -1,6 +1,6 @@
 # ascii-bomb-ecs-mp
 
-Multiplayer experiment of the [ascii-bomb-ecs](https://github.com/aleksa2808/ascii-bomb-ecs) game that uses peer-to-peer rollback networking. Available natively or as a [web build](https://aleksa2808.github.io/ascii-bomb-ecs-mp/).
+Online multiplayer version of the [ascii-bomb-ecs](https://github.com/aleksa2808/ascii-bomb-ecs) game that uses peer-to-peer rollback networking. Available as a [web build](https://aleksa2808.github.io/ascii-bomb-ecs-mp/)!
 
 ## Configuration
 
