@@ -1145,7 +1145,7 @@ pub fn wall_of_death_update(
     let get_next_position_direction =
         |mut position: Position, mut direction: Direction| -> Option<(Position, Direction)> {
             let end_position = Position {
-                y: map_size.rows as i8 - 3,
+                y: map_size.rows - 3,
                 x: 3,
             };
 
@@ -1160,23 +1160,19 @@ pub fn wall_of_death_update(
                     Position { y: 1, x: 1 } | Position { y: 2, x: 2 } => {
                         direction = Direction::Right;
                     }
-                    Position { y: 1, x } if x == map_size.columns as i8 - 2 => {
+                    Position { y: 1, x } if x == map_size.columns - 2 => {
                         direction = Direction::Down;
                     }
-                    Position { y, x }
-                        if y == map_size.rows as i8 - 2 && x == map_size.columns as i8 - 2 =>
-                    {
+                    Position { y, x } if y == map_size.rows - 2 && x == map_size.columns - 2 => {
                         direction = Direction::Left;
                     }
-                    Position { y, x: 2 } if y == map_size.rows as i8 - 2 => {
+                    Position { y, x: 2 } if y == map_size.rows - 2 => {
                         direction = Direction::Up;
                     }
-                    Position { y: 2, x } if x == map_size.columns as i8 - 3 => {
+                    Position { y: 2, x } if x == map_size.columns - 3 => {
                         direction = Direction::Down;
                     }
-                    Position { y, x }
-                        if y == map_size.rows as i8 - 3 && x == map_size.columns as i8 - 3 =>
-                    {
+                    Position { y, x } if y == map_size.rows - 3 && x == map_size.columns - 3 => {
                         direction = Direction::Left;
                     }
                     _ => (),
@@ -1249,7 +1245,7 @@ pub fn wall_of_death_update(
 
                     Some(WallOfDeath::Active {
                         position: Position {
-                            y: map_size.rows as i8 - 1,
+                            y: map_size.rows - 1,
                             x: 1,
                         },
                         direction: Direction::Up,
@@ -1324,12 +1320,7 @@ pub fn cleanup_dead(
             let invalid_item_positions: HashSet<Position> =
                 invalid_item_position_query.iter().copied().collect();
             let mut valid_positions = (1..map_size.rows - 1)
-                .flat_map(|y| {
-                    (1..map_size.columns - 1).map(move |x| Position {
-                        y: y as i8,
-                        x: x as i8,
-                    })
-                })
+                .flat_map(|y| (1..map_size.columns - 1).map(move |x| Position { y, x }))
                 .filter(|position| !invalid_item_positions.contains(position))
                 .collect_vec();
             shuffle(&mut valid_positions, &mut session_rng);

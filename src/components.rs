@@ -49,25 +49,20 @@ pub struct Dead {
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Position {
-    pub y: i8,
-    pub x: i8,
+    pub y: u8,
+    pub x: u8,
 }
 
 impl Position {
     pub fn offset(&self, direction: Direction, distance: u8) -> Self {
-        let distance = distance as i8;
-
-        let (y_offset, x_offset) = match direction {
-            Direction::Right => (0, distance),
-            Direction::Down => (distance, 0),
-            Direction::Left => (0, -distance),
-            Direction::Up => (-distance, 0),
+        let (new_y, new_x) = match direction {
+            Direction::Right => (self.y, self.x + distance),
+            Direction::Down => (self.y + distance, self.x),
+            Direction::Left => (self.y, self.x - distance),
+            Direction::Up => (self.y - distance, self.x),
         };
 
-        Position {
-            y: self.y + y_offset,
-            x: self.x + x_offset,
-        }
+        Position { y: new_y, x: new_x }
     }
 }
 

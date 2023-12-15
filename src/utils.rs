@@ -30,12 +30,12 @@ use crate::{
     types::{Direction, PlayerID, RoundOutcome},
 };
 
-pub fn get_x(x: i8) -> f32 {
-    TILE_WIDTH as f32 / 2.0 + (x as i32 * TILE_WIDTH as i32) as f32
+pub fn get_x(x: u8) -> f32 {
+    TILE_WIDTH as f32 / 2.0 + (x as u32 * TILE_WIDTH) as f32
 }
 
-pub fn get_y(y: i8) -> f32 {
-    -(TILE_HEIGHT as f32 / 2.0 + (y as i32 * TILE_HEIGHT as i32) as f32)
+pub fn get_y(y: u8) -> f32 {
+    -(TILE_HEIGHT as f32 / 2.0 + (y as u32 * TILE_HEIGHT) as f32)
 }
 
 pub fn decode(input: &str) -> String {
@@ -407,7 +407,7 @@ fn spawn_map(
         for i in 0..map_size.columns {
             commands.spawn(SpriteBundle {
                 texture: game_textures.get_map_textures(world_type).empty.clone(),
-                transform: Transform::from_xyz(get_x(i as i8), get_y(j as i8), 0.0),
+                transform: Transform::from_xyz(get_x(i), get_y(j), 0.0),
                 sprite: Sprite {
                     custom_size: Some(Vec2::new(TILE_WIDTH as f32, TILE_HEIGHT as f32)),
                     ..Default::default()
@@ -421,29 +421,26 @@ fn spawn_map(
     let mut stone_wall_positions = HashSet::new();
     for i in 0..map_size.rows {
         // left
-        stone_wall_positions.insert(Position { y: i as i8, x: 0 });
+        stone_wall_positions.insert(Position { y: i, x: 0 });
         // right
         stone_wall_positions.insert(Position {
-            y: i as i8,
-            x: (map_size.columns - 1) as i8,
+            y: i,
+            x: (map_size.columns - 1),
         });
     }
     for i in 1..map_size.columns - 1 {
         // top
-        stone_wall_positions.insert(Position { y: 0, x: i as i8 });
+        stone_wall_positions.insert(Position { y: 0, x: i });
         // bottom
         stone_wall_positions.insert(Position {
-            y: (map_size.rows - 1) as i8,
-            x: i as i8,
+            y: (map_size.rows - 1),
+            x: i,
         });
     }
     // checkered middle
     for i in (2..map_size.rows).step_by(2) {
         for j in (2..map_size.columns).step_by(2) {
-            stone_wall_positions.insert(Position {
-                y: i as i8,
-                x: j as i8,
-            });
+            stone_wall_positions.insert(Position { y: i, x: j });
         }
     }
 
@@ -465,12 +462,7 @@ fn spawn_map(
     }
 
     let mut destructible_wall_potential_positions: HashSet<Position> = (0..map_size.rows)
-        .flat_map(|y| {
-            (0..map_size.columns).map(move |x| Position {
-                y: y as i8,
-                x: x as i8,
-            })
-        })
+        .flat_map(|y| (0..map_size.columns).map(move |x| Position { y, x }))
         .filter(|p| !stone_wall_positions.contains(p))
         .collect();
 
@@ -591,13 +583,9 @@ pub fn setup_round(
         (3, map_size.columns - 6),
         (map_size.rows - 4, 5),
     ];
-    let mut possible_player_spawn_positions =
-        possible_player_spawn_positions
-            .iter()
-            .map(|(y, x)| Position {
-                y: *y as i8,
-                x: *x as i8,
-            });
+    let mut possible_player_spawn_positions = possible_player_spawn_positions
+        .iter()
+        .map(|(y, x)| Position { y: *y, x: *x });
 
     let mut player_spawn_positions = vec![];
     for player_id in player_ids {
