@@ -19,12 +19,12 @@ pub const COLORS: [RGBColor; 16] = [
     RGBColor(242, 242, 242),
 ];
 
-pub const PIXEL_SCALE: usize = 8;
+pub const PIXEL_SCALE: u32 = 8;
 
-pub const HUD_HEIGHT: usize = 14 * PIXEL_SCALE;
+pub const HUD_HEIGHT: u32 = 14 * PIXEL_SCALE;
 
-pub const TILE_HEIGHT: usize = 8 * PIXEL_SCALE;
-pub const TILE_WIDTH: usize = 6 * PIXEL_SCALE;
+pub const TILE_HEIGHT: u32 = 8 * PIXEL_SCALE;
+pub const TILE_WIDTH: u32 = 6 * PIXEL_SCALE;
 
 pub const WALL_Z_LAYER: f32 = 60.0;
 pub const PLAYER_Z_LAYER: f32 = 50.0;
@@ -39,21 +39,21 @@ pub const INPUT_LEFT: u8 = 1 << 2;
 pub const INPUT_RIGHT: u8 = 1 << 3;
 pub const INPUT_ACTION: u8 = 1 << 4;
 
-pub const ROUND_DURATION_SECS: usize = 60;
+pub const ROUND_DURATION_SECS: u32 = 60;
 
-pub const FPS: usize = 30;
-pub const MAX_PREDICTED_FRAMES: usize = 8;
+pub const FPS: u32 = 30;
+pub const MAX_PREDICTED_FRAMES: u32 = 8;
 
 // these must not be lower than MAX_PREDICTED_FRAMES
 // TODO can some static asserts be made?
-pub const GET_READY_DISPLAY_FRAME_COUNT: usize = 3 * FPS;
-pub const GAME_START_FREEZE_FRAME_COUNT: usize = FPS / 2;
-pub const LEADERBOARD_DISPLAY_FRAME_COUNT: usize = 2 * FPS;
-pub const TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT: usize = 5 * FPS;
+pub const GET_READY_DISPLAY_FRAME_COUNT: u32 = 3 * FPS;
+pub const GAME_START_FREEZE_FRAME_COUNT: u32 = FPS / 2;
+pub const LEADERBOARD_DISPLAY_FRAME_COUNT: u32 = 2 * FPS;
+pub const TOURNAMENT_WINNER_DISPLAY_FRAME_COUNT: u32 = 5 * FPS;
 
-pub const BOMB_SHORTENED_FUSE_FRAME_COUNT: usize = 2;
+pub const BOMB_SHORTENED_FUSE_FRAME_COUNT: u32 = 2;
 
-pub const MOVING_OBJECT_FRAME_INTERVAL: usize = 1;
+pub const MOVING_OBJECT_FRAME_INTERVAL: u32 = 1;
 
-// TODO does float precision cause desyncs?
-pub const ITEM_SPAWN_CHANCE_PERCENTAGE: usize = 33;
+// TODO figure out if floats can be used deterministically
+pub const ITEM_SPAWN_CHANCE_PERCENTAGE: u64 = 33;

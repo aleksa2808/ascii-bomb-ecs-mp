@@ -44,9 +44,9 @@ impl From<RGBColor> for BackgroundColor {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PlayerID(pub usize);
+pub struct PlayerID(pub u8);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     Left,
     Right,
@@ -58,7 +58,7 @@ impl Direction {
     pub const LIST: [Self; 4] = [Self::Right, Self::Left, Self::Up, Self::Down];
 }
 
-#[derive(Clone, Copy, Hash)]
+#[derive(Clone, Copy)]
 pub enum RoundOutcome {
     Tie,
     Winner(PlayerID),

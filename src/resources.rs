@@ -1,6 +1,7 @@
 use bevy::{ecs as bevy_ecs, prelude::*, text::Font, utils::HashMap};
 use bevy_matchbox::matchbox_socket::PeerId;
-use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
+use rand::{Rng, SeedableRng};
+use rand_xoshiro::Xoshiro256StarStar;
 
 use crate::{
     components::Position,
@@ -11,7 +12,7 @@ use crate::{
 #[derive(Resource)]
 pub struct NetworkStatsCooldown {
     pub cooldown: Cooldown,
-    pub print_cooldown: usize,
+    pub print_cooldown: u32,
 }
 
 #[derive(Resource)]
@@ -92,7 +93,7 @@ impl GameTextures {
         self.penguin_variants
             .iter()
             .cycle()
-            .nth(player_id.0)
+            .nth(player_id.0 as usize)
             .unwrap()
     }
 }
@@ -148,11 +149,10 @@ impl FromWorld for GameTextures {
 
 #[derive(Resource, Clone, Copy)]
 pub struct MapSize {
-    pub rows: usize,
-    pub columns: usize,
+    pub rows: u8,
+    pub columns: u8,
 }
 
-// Not to be confused with Bevy ECS `World`!
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(clippy::enum_variant_names)]
 pub enum WorldType {
@@ -164,27 +164,27 @@ pub enum WorldType {
 impl WorldType {
     pub const LIST: [Self; 3] = [Self::GrassWorld, Self::IceWorld, Self::CloudWorld];
 
-    pub fn random(rng: &mut StdRng) -> Self {
-        match rng.gen_range(1..=3) {
-            1 => Self::GrassWorld,
-            2 => Self::IceWorld,
-            3 => Self::CloudWorld,
+    pub fn random(rng: &mut SessionRng) -> Self {
+        match rng.gen_u64() % 3 {
+            0 => Self::GrassWorld,
+            1 => Self::IceWorld,
+            2 => Self::CloudWorld,
             _ => unreachable!(),
         }
     }
 
-    pub fn next_random(&self, rng: &mut StdRng) -> Self {
+    pub fn next_random(&self, rng: &mut SessionRng) -> Self {
         Self::LIST
             .into_iter()
             .filter(|&w| w != *self)
-            .choose(rng)
+            .nth((rng.gen_u64() as usize) % (Self::LIST.len() - 1))
             .unwrap()
     }
 }
 
 #[derive(Resource)]
 pub struct MatchboxConfig {
-    pub number_of_players: usize,
+    pub number_of_players: u8,
     pub room_id: String,
     pub matchbox_server_url: Option<String>,
     pub ice_server_config: Option<ICEServerConfig>,
@@ -196,41 +196,53 @@ pub struct RngSeeds {
     pub remote: HashMap<PeerId, Option<u64>>,
 }
 
+// I could not verify it but I assume that the Xoshiro256StarStar generator is platform-independent. This is necessary for cross-platform deterministic gameplay.
 #[derive(Resource, Clone)]
-pub struct SessionRng(pub StdRng);
+pub struct SessionRng(Xoshiro256StarStar);
+
+impl SessionRng {
+    pub fn new(seed: u64) -> Self {
+        Self(Xoshiro256StarStar::seed_from_u64(seed))
+    }
+
+    // Allow only `u64` number generation in order to prevent things like generating platform dependent `usize` values.
+    pub fn gen_u64(&mut self) -> u64 {
+        self.0.gen()
+    }
+}
 
 #[derive(Resource)]
-pub struct LocalPlayerID(pub usize);
+pub struct LocalPlayerID(pub u8);
 
 #[derive(Resource)]
 pub struct Leaderboard {
-    pub scores: HashMap<PlayerID, usize>,
-    pub winning_score: usize,
+    pub scores: HashMap<PlayerID, u8>,
+    pub winning_score: u8,
 }
 
 #[derive(Resource, Clone, Copy)]
 pub struct FrameCount {
-    pub frame: usize,
+    pub frame: u32,
 }
 
 #[derive(Resource, Clone, Copy)]
 pub enum WallOfDeath {
     Dormant {
-        activation_frame: usize,
+        activation_frame: u32,
     },
     Active {
         position: Position,
         direction: Direction,
-        next_step_frame: usize,
+        next_step_frame: u32,
     },
     Done,
 }
 
 #[derive(Resource)]
-pub struct GameEndFrame(pub usize);
+pub struct GameEndFrame(pub u32);
 
 #[derive(Resource, Clone, Copy)]
 pub struct GameFreeze {
-    pub end_frame: usize,
+    pub end_frame: u32,
     pub post_freeze_action: Option<PostFreezeAction>,
 }
